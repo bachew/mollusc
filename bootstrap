@@ -215,15 +215,25 @@ class main(object):
         return args
 
     def update(self):
+        in_venv = self.inside_venv()
         venv_dir = self.venv_dir
 
-        if self.clean and osp.exists(venv_dir):
+        if self.clean:
+            if in_venv:
+                raise BootstrapError('Cannot remove virtual environment because you are inside')
+
             info('Removing virtual environment {!r}'.format(venv_dir))
-            shutil.rmtree(venv_dir)
+            try:
+                shutil.rmtree(venv_dir)
+            except OSError as e:
+                if e.errno == errno.ENOENT:
+                    pass
+                else:
+                    raise
 
         venv_updated = False
 
-        if not self.inside_venv():
+        if not in_venv:
             info('Not inside virtual environment, create/updating one...')
 
             if self.python_version < (3, 0, 0):
@@ -266,7 +276,7 @@ class main(object):
                 os.chdir(work_dir)
 
         if venv_updated:
-            info("Virtual environment created/updated, please run 'source {}' to activate it".format(
+            info("\nVirtual environment created/updated, please run 'source {}' to activate it".format(
                 osp.relpath(osp.join(venv_dir, 'bin', 'activate'))))
 
     def inside_venv(self):
@@ -289,12 +299,8 @@ class main(object):
         cmdline = subprocess.list2cmdline(cmd)
         info('run:', cmdline)
 
-        env = dict(os.environ)
-        # TODO: make this configurable, maybe can use --cache-dir option?
-        env['PIP_DOWNLOAD_CACHE'] = osp.expanduser('~/.pip/cache')
-
         try:
-            subprocess.check_call(cmd, env=env)
+            subprocess.check_call(cmd)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 raise BootstrapError('Command {!r} not found, did you install it?'.format(cmd[0]))
