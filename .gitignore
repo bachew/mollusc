@@ -1,0 +1,9 @@
+.*
+!.gitignore
+
+*.pyc
+*.egg-info
+*.log
+__pycache__
+
+/bootstrap_config_test.py
