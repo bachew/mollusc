@@ -38,9 +38,9 @@ def project(method):
             print('\n')  # easier to debug
             run(*cmd)
 
-            proj_name = osp.basename(proj_dir)
-            pythons = list_dir(proj_dir, '.{}-py*'.format(proj_name), 'bin/python')
-            return pythons[0] if pythons else 'venv-python-not-found'
+            # glob() ignore hidden files if dot not specified
+            pythons = list_dir(proj_dir, '.*/bin/python') + list_dir(proj_dir, '*/bin/python')
+            return pythons[0] if pythons else 'python-not-found'
 
         script_path = osp.abspath(osp.join(osp.dirname(__file__), 'bootstrap'))
         shutil.copy2(script_path, proj_dir)
@@ -199,7 +199,6 @@ class Test(TestCase):
         # kerberos==1.2.5 is not in testpypi
         self.assertRaises(CalledProcessError, bootstrap)
 
-    # TODO: add venv_dir test
     @project
     def test_config(self, proj_dir, bootstrap):
         def bootstrap_list():
@@ -238,6 +237,14 @@ class Test(TestCase):
         # Assert no phantom config created by left over pyc files
         self.assertTrue("python = 'python3'" in output)
         self.assertTrue("dev = True" in output)
+
+    @project
+    def test_venv_dir(self, proj_dir, bootstrap):
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            venv_dir = 'venv'
+            ''')
+        python = bootstrap()
+        self.assertTrue(osp.samefile(osp.join(proj_dir, 'venv/bin/python'), python))
 
     @project
     def test_post_bootstrap(self, proj_dir, bootstrap):
