@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from contextlib import contextmanager
 from os import path as osp
 
 
@@ -231,8 +232,6 @@ class main(object):
                 else:
                     raise
 
-        venv_updated = False
-
         if not in_venv:
             info('Not inside virtual environment, create/updating one...')
 
@@ -241,10 +240,9 @@ class main(object):
             else:
                 self.run(['python3', '-m', 'venv', venv_dir])
 
-            venv_updated = True
+            self.activate_venv()
 
-        pip = osp.join(venv_dir, 'bin', 'pip') if venv_updated else 'pip'
-        pip_install = [pip, 'install']
+        pip_install = ['pip', 'install']
 
         if self.pip_install_options:
             pip_install += list(self.pip_install_options)
@@ -268,7 +266,6 @@ class main(object):
                 'venv_dir': venv_dir,
                 'clean': self.clean,
             }
-            info('post_bootstrap', kwargs)
 
             try:
                 work_dir = os.getcwd()
@@ -276,8 +273,8 @@ class main(object):
             finally:
                 os.chdir(work_dir)
 
-        if venv_updated:
-            info("\nVirtual environment created/updated, please run 'source {}' to activate it".format(
+        if not in_venv:
+            info("\nPlease run 'source {}' to activate virtual environment".format(
                 osp.relpath(osp.join(venv_dir, 'bin', 'activate'))))
 
     def inside_venv(self):
@@ -295,6 +292,28 @@ class main(object):
 
         info('Inside virtual environment')
         return True
+
+    def activate_venv(self):
+        # Modified from https://github.com/pypa/virtualenv/blob/master/virtualenv_embedded/activate_this.py
+        old_os_path = os.environ.get('PATH', '')
+        base = self.venv_dir
+        os.environ['PATH'] = osp.join(base, 'bin') + os.pathsep + old_os_path
+        if sys.platform == 'win32':
+            site_packages = os.path.join(base, 'Lib', 'site-packages')
+        else:
+            site_packages = os.path.join(base, 'lib', 'python%s' % sys.version[:3], 'site-packages')
+        prev_sys_path = list(sys.path)
+        import site
+        site.addsitedir(site_packages)
+        sys.real_prefix = sys.prefix
+        sys.prefix = base
+        # Move the added items to the front of the path:
+        new_sys_path = []
+        for item in list(sys.path):
+            if item not in prev_sys_path:
+                new_sys_path.append(item)
+                sys.path.remove(item)
+        sys.path[:0] = new_sys_path
 
     def run(self, cmd):
         cmdline = subprocess.list2cmdline(cmd)

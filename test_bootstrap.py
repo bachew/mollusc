@@ -277,3 +277,25 @@ class Test(TestCase):
                 "post_bootstrap2(clean=False, dev=True, venv_dir='venv')\n"
             )
             self.assertEqual(exp_log, f.read())
+
+    @project
+    def test_activation(self, proj_dir, bootstrap):
+        write_file(osp.join(proj_dir, 'requirements.txt'), '''\
+            py
+            ''')
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            from subprocess import check_call
+
+
+            venv_dir = 'venv'
+
+
+            def post_bootstrap(**kwargs):
+                import py
+
+                check_call(['pip', 'install', 'pytest'])
+                import pytest
+            ''')
+        python = bootstrap()
+        pytest = osp.join(osp.dirname(python), 'pytest')
+        assert osp.exists(pytest)
