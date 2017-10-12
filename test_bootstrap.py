@@ -249,27 +249,31 @@ class Test(TestCase):
     @project
     def test_post_bootstrap(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            venv_dir = 'venv'
+
             def post_bootstrap(**kwargs):
-                # Current dir is always project dir
                 with open('bootstrap.log', 'a') as f:
-                    f.write('Just checking\\n')
+                    f.write('post_bootstrap({})\\n'.format(format_kwargs(kwargs)))
+
+            def format_kwargs(kwargs):
+                return ', '.join(['{}={!r}'.format(k, v) for (k, v) in sorted(kwargs.items())])
             ''')
         write_file(osp.join(proj_dir, 'bootstrap_config_test.py'), '''\
             import bootstrap_config
-            from os import path as osp
-            from subprocess import check_call
 
 
             def post_bootstrap(**kwargs):
                 bootstrap_config.post_bootstrap(**kwargs)
 
                 with open('bootstrap.log', 'a') as f:
-                    f.write('Install something\\n')
-
-                pip = osp.join(kwargs['venv_dir'], 'bin', 'pip')
-                check_call([pip, 'install', 'six'])
+                    kwargs_str = bootstrap_config.format_kwargs(kwargs)
+                    f.write('post_bootstrap2({})\\n'.format(kwargs_str))
             ''')
         bootstrap()
 
         with open(osp.join(proj_dir, 'bootstrap.log')) as f:
-            self.assertEqual(f.read(), 'Just checking\nInstall something\n')
+            exp_log = (
+                "post_bootstrap(clean=False, dev=True, venv_dir='venv')\n"
+                "post_bootstrap2(clean=False, dev=True, venv_dir='venv')\n"
+            )
+            self.assertEqual(exp_log, f.read())

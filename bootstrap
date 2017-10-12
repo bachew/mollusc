@@ -266,6 +266,7 @@ class main(object):
             kwargs = {
                 'dev': self.dev,
                 'venv_dir': venv_dir,
+                'clean': self.clean,
             }
             info('post_bootstrap', kwargs)
 
