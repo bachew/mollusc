@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+import argparse
 import errno
 import os
 import re
@@ -9,12 +10,11 @@ import shutil
 import subprocess
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from contextlib import contextmanager
 from os import path as osp
 
 
 class main(object):
-    VERSION = '0.0.1'
+    VERSION = '0.0.2'
     CONFIGURABLES = [
         'description',
         'python',
@@ -71,6 +71,7 @@ class main(object):
             return
 
         self.clean = args.clean
+        self.command = args.command
 
         try:
             self.update()
@@ -212,8 +213,9 @@ class main(object):
                             help='just list configuration')
         parser.add_argument('--clean', action='store_true',
                             help='remove virtual environment before creating')
-        args = parser.parse_args()
-        return args
+        parser.add_argument('command', nargs=argparse.REMAINDER,
+                            help='command to execute inside virtual environment')
+        return parser.parse_args()
 
     def update(self):
         in_venv = self.inside_venv()
@@ -240,6 +242,7 @@ class main(object):
             else:
                 self.run(['python3', '-m', 'venv', venv_dir])
 
+            info('Activating virtual environment')
             self.activate_venv()
 
         pip_install = ['pip', 'install']
@@ -273,7 +276,9 @@ class main(object):
             finally:
                 os.chdir(work_dir)
 
-        if not in_venv:
+        if self.command:
+            self.run(self.command)
+        elif not in_venv:
             info("\nPlease run 'source {}' to activate virtual environment".format(
                 osp.relpath(osp.join(venv_dir, 'bin', 'activate'))))
 

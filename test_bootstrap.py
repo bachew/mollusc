@@ -12,10 +12,18 @@ from textwrap import dedent
 from unittest import TestCase
 
 
+BASE_DIR = osp.abspath(osp.dirname(__file__))
+
+
+# Cache is disabled by default in Debian 8 Pip 9.0.1
+# TODO: check that this is not happening elsewhere
+os.environ['PIP_DOWNLOAD_CACHE'] = osp.join(BASE_DIR, '.pip-cache')
+
+
 def project(method):
     @functools.wraps(method)
     def wrapped(self):
-        test_dir = osp.abspath('.test')
+        test_dir = osp.join(BASE_DIR, '.test')
 
         # Clear once per test run
         if not project.test_dir_cleared and osp.exists(test_dir):
@@ -299,3 +307,12 @@ class Test(TestCase):
         python = bootstrap()
         pytest = osp.join(osp.dirname(python), 'pytest')
         assert osp.exists(pytest)
+
+    @project
+    def test_run_command(self, proj_dir, bootstrap):
+        write_file(osp.join(proj_dir, 'requirements.txt'), '''\
+            py
+            ''')
+
+        bootstrap('python', '-c', "import py; py.path.local('marker').write('')")
+        self.assertTrue(osp.exists(osp.join(proj_dir, 'marker')))
