@@ -22,8 +22,8 @@ os.environ['PIP_DOWNLOAD_CACHE'] = osp.join(BASE_DIR, '.pip-cache')
 
 def project(method):
     @functools.wraps(method)
-    def wrapped(self):
-        test_dir = osp.join(BASE_DIR, '.test')
+    def wrapped(test_case):
+        test_dir = osp.join(BASE_DIR, '.bootstrap-test')
 
         # Clear once per test run
         if not project.test_dir_cleared and osp.exists(test_dir):
@@ -46,7 +46,7 @@ def project(method):
             print('\n')  # easier to debug
             run(*cmd)
 
-            # glob() ignore hidden files if dot not specified
+            # glob() ignore hidden files if .* is not specified
             pythons = list_dir(proj_dir, '.*/bin/python') + list_dir(proj_dir, '*/bin/python')
             return pythons[0] if pythons else 'python-not-found'
 
@@ -59,7 +59,7 @@ def project(method):
         print('cd {!r}'.format(method_dir))
         os.chdir(method_dir)
         try:
-            return method(self, osp.relpath(proj_dir), bootstrap)
+            return method(test_case, osp.relpath(proj_dir), bootstrap)
         finally:
             os.chdir(old_dir)
 
@@ -90,6 +90,11 @@ def write_file(path, content):
         f.write(dedent(content))
 
 
+def read_file(path):
+    with open(path) as f:
+        return f.read()
+
+
 def run(*cmd, **kwargs):
     cmd = list(cmd)
     capture = kwargs.pop('capture', False)
@@ -98,13 +103,16 @@ def run(*cmd, **kwargs):
         raise TypeError('Unknown arguments {!r}'.format(kwargs))
 
     cmdline = subprocess.list2cmdline(cmd)
-    print('run:', cmdline)
+    print(cmdline)
 
-    if capture:
-        output = subprocess.check_output(cmd)
-        return output.decode(sys.stdout.encoding or 'utf-8')
+    with open(os.devnull) as stdin:
+        kwargs['stdin'] = stdin
 
-    subprocess.check_call(cmd)
+        if capture:
+            output = subprocess.check_output(cmd, **kwargs)
+            return output.decode(sys.stdout.encoding or 'utf-8')
+
+        subprocess.check_call(cmd, **kwargs)
 
 
 class Test(TestCase):
@@ -316,3 +324,12 @@ class Test(TestCase):
 
         bootstrap('python', '-c', "import py; py.path.local('marker').write('')")
         self.assertTrue(osp.exists(osp.join(proj_dir, 'marker')))
+
+    @project
+    def test_shells(self, proj_dir, bootstrap):
+        bootstrap()
+        shells = ['bash']
+        # TODO: shells = ['bash', 'csh', 'fish', 'zsh']
+
+        for name in shells:
+            bootstrap('-s', name)

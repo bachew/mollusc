@@ -1,0 +1,7 @@
+site_name: Mollusc
+site_dir: .site
+docs_dir: src/doc
+
+pages:
+  - Intro: index.md
+  - TODO: todo.md

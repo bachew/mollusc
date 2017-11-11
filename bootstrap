@@ -9,8 +9,11 @@ import runpy
 import shutil
 import subprocess
 import sys
+import tempfile
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from contextlib import contextmanager
 from os import path as osp
+from subprocess import list2cmdline
 
 
 class main(object):
@@ -18,13 +21,14 @@ class main(object):
     CONFIGURABLES = [
         'description',
         'python',
-        'venv_dir',
+        'venv_dir',  # TODO: remove this
         'bootstrap_requires',
         'dev',
         'pip_install_options',
         'post_bootstrap',
     ]
     DEFAULT_PYTHON = 'python3'
+    ENCODING = sys.stdout.encoding or 'utf-8'
 
     def __init__(self):
         self.project_dir = osp.dirname(osp.abspath(__file__))
@@ -74,7 +78,10 @@ class main(object):
         self.command = args.command
 
         try:
-            self.update()
+            if args.shell:
+                self.run_shell(args.shell)
+            else:
+                self.update_venv()
         except subprocess.CalledProcessError:
             # No need extra message, command usually fails with verbose error
             raise SystemExit(1)
@@ -89,7 +96,7 @@ class main(object):
 
         return (
             'bootstrap {} for development\n\n'
-            'For more info: https://github.com/bachew/mollusc#bootstrap').format(
+            'For more info: https://github.com/bachew/mollusc').format(
             self.project_name)
 
     @description.setter
@@ -112,7 +119,7 @@ class main(object):
             # Python 2.7 prints version to stderr
             output = subprocess.check_output([self.python, '--version'],
                                              stderr=subprocess.STDOUT)
-            output = output.decode(sys.stdout.encoding or 'utf-8')
+            output = output.decode(self.ENCODING)
             m = re.match(r'.*(\d+)\.(\d+)\.(\d+).*', output.strip())
             cache[self.python] = int(m.group(1)), int(m.group(2)), int(m.group(3))
 
@@ -195,6 +202,10 @@ class main(object):
         parser.add_argument('--version', action='store_true',
                             help='print bootstrap script version')
 
+        parser.add_argument('-s', '--shell',
+                            choices=['bash', 'csh', 'fish', 'zsh'],
+                            help='start the specified shell with virtual environment activated')
+
         def boolean(s):
             s = s.lower()
 
@@ -215,9 +226,10 @@ class main(object):
                             help='remove virtual environment before creating')
         parser.add_argument('command', nargs=argparse.REMAINDER,
                             help='command to execute inside virtual environment')
-        return parser.parse_args()
+        args = parser.parse_args()
+        return args
 
-    def update(self):
+    def update_venv(self):
         in_venv = self.inside_venv()
         venv_dir = self.venv_dir
 
@@ -279,8 +291,37 @@ class main(object):
         if self.command:
             self.run(self.command)
         elif not in_venv:
-            info("\nPlease run 'source {}' to activate virtual environment".format(
-                osp.relpath(osp.join(venv_dir, 'bin', 'activate'))))
+            info("\nPlease run '{} -s <shell>' to enter virtual environment".format(sys.argv[0]))
+
+    def run_shell(self, shell=None):
+        mapping = {
+            'bash': self.run_bash,
+            'csh': self.run_csh,
+            'fish': self.run_fish,
+            'zsh': self.run_zsh,
+        }
+        mapping[shell]()
+
+    def run_bash(self):
+        init_script = (
+            'if [ -e ~/.bashrc ]; then . ~/.bashrc; fi\n'
+            '. "{}"\n'.format(osp.abspath(osp.join(self.venv_dir, 'bin/activate')))
+        )
+
+        with self.temp_file(init_script) as path:
+            self.run(['bash', '--init-file', path, '-i'])
+
+    def run_csh(self):
+        cmd = 'source {}'.format(osp.relpath(osp.join(self.venv_dir, 'bin/activate.csh')))
+        raise BootstrapError('csh is not yet supported, please run {!r}'.format(cmd))
+
+    def run_fish(self):
+        cmd = 'source {}'.format(osp.relpath(osp.join(self.venv_dir, 'bin/activate.fish')))
+        raise BootstrapError('fish is not yet supported, please run {!r}'.format(cmd))
+
+    def run_zsh(self):
+        cmd = 'source {}'.format(osp.relpath(osp.join(self.venv_dir, 'bin/activate')))
+        raise BootstrapError('zsh is not yet supported, please run {!r}'.format(cmd))
 
     def inside_venv(self):
         sys_version = sys.version.lower()
@@ -301,7 +342,7 @@ class main(object):
     def activate_venv(self):
         # Modified from https://github.com/pypa/virtualenv/blob/master/virtualenv_embedded/activate_this.py
         old_os_path = os.environ.get('PATH', '')
-        base = self.venv_dir
+        base = osp.abspath(self.venv_dir)
         os.environ['PATH'] = osp.join(base, 'bin') + os.pathsep + old_os_path
         if sys.platform == 'win32':
             site_packages = os.path.join(base, 'Lib', 'site-packages')
@@ -320,12 +361,11 @@ class main(object):
                 sys.path.remove(item)
         sys.path[:0] = new_sys_path
 
-    def run(self, cmd):
-        cmdline = subprocess.list2cmdline(cmd)
-        info('run:', cmdline)
+    def run(self, cmd, **kwargs):
+        info(list2cmdline(cmd))
 
         try:
-            subprocess.check_call(cmd)
+            subprocess.check_call(cmd, **kwargs)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 raise BootstrapError('Command {!r} not found, did you install it?'.format(cmd[0]))
@@ -343,6 +383,16 @@ class main(object):
 
         cmd.append(venv_dir)
         self.run(cmd)
+
+    @contextmanager
+    def temp_file(self, content):
+        fd, path = tempfile.mkstemp(prefix='{}-'.format(self.project_name))
+        try:
+            os.write(fd, content.encode(self.ENCODING))
+            os.close(fd)
+            yield path
+        finally:
+            os.remove(path)
 
 
 class BootstrapError(Exception):
