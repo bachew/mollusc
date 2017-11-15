@@ -126,9 +126,9 @@ class Shell(object):
         try:
             return func(cmd, **kwargs)
         except subprocess.CalledProcessError as e:
-                cmdline = list2cmdline(cmd)
-                msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
-                raise self.CommandFailed(msg, e)
+            cmdline = list2cmdline(cmd)
+            msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
+            raise self.CommandFailed(msg, e)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 cmdline = list2cmdline(cmd)

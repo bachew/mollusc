@@ -13,11 +13,11 @@ import tempfile
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from contextlib import contextmanager
 from os import path as osp
-from subprocess import list2cmdline
+from subprocess import CalledProcessError, list2cmdline
 
 
 class main(object):
-    VERSION = '0.0.3'
+    VERSION = '0.0.4'
     CONFIGURABLES = [
         'description',
         'python',
@@ -33,10 +33,6 @@ class main(object):
     def __init__(self):
         self.project_dir = osp.dirname(osp.abspath(__file__))
         self.project_name = osp.basename(self.project_dir)
-
-        self._python_version_cache = {}
-        self.venv_dir = osp.join(self.project_dir, '.{}-py{}'.format(self.project_name, self.python_version_str))
-
         self.bootstrap_requires = [
             'pip>=9.0.1',  # pip should be the first
             'setuptools>=36.0.1',
@@ -45,6 +41,8 @@ class main(object):
         self.dev = True
         self.pip_config = None
         self.post_bootstrap = None
+
+        script = osp.abspath(__file__)  # before cd
 
         info('cd {!r}'.format(self.project_dir))
         os.chdir(self.project_dir)
@@ -69,6 +67,23 @@ class main(object):
         if args.python:
             self.python = args.python
 
+        # Now that we've got python version, let's check
+        if sys.version_info[:3] != self.python_version:
+            info('\nSwitching bootstrap from Python {} to {}'.format(
+                self.format_py_version(sys.version_info[:3]),
+                self.format_py_version(self.python_version)))
+            try:
+                self.run([self.python, script] + sys.argv[1:])
+            except CalledProcessError as e:
+                exit_status = e.returncode
+            else:
+                exit_status = 0
+
+            raise SystemExit(exit_status)
+
+        self.venv_dir = osp.join(self.project_dir, '.{}-py{}'.format(
+            self.project_name, self.format_py_version(self.python_version)))
+
         if args.dev is not None:
             self.dev = args.dev
 
@@ -85,7 +100,7 @@ class main(object):
                 self.run_shell(args.shell)
             else:
                 self.update_venv()
-        except subprocess.CalledProcessError:
+        except CalledProcessError:
             # No need extra message, command usually fails with verbose error
             raise SystemExit(1)
         except BootstrapError as e:
@@ -116,6 +131,9 @@ class main(object):
 
     @property
     def python_version(self):
+        if not hasattr(self, '_python_version_cache'):
+            self._python_version_cache = {}
+
         cache = self._python_version_cache
 
         if self.python not in cache:
@@ -128,9 +146,8 @@ class main(object):
 
         return cache[self.python]
 
-    @property
-    def python_version_str(self):
-        return '.'.join([str(c) for c in self.python_version])
+    def format_py_version(self, version):
+        return '.'.join([str(c) for c in version])
 
     def load_config_module(self, mod_name):
         mod_file = '{}.py'.format(mod_name)
@@ -240,7 +257,7 @@ class main(object):
             if self.dev:
                 self.run(pip_install + ['-e', '.'])
             else:
-                self.run(pip_install + ['.'])
+                self.run(pip_install + ['-U', '.'])
 
         if self.dev and osp.exists('requirements.txt'):
             self.run(pip_install + ['-r', 'requirements.txt'])
