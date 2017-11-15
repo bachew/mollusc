@@ -52,8 +52,6 @@ def project(method):
 
         script_path = osp.abspath(osp.join(osp.dirname(__file__), 'bootstrap'))
         shutil.copy2(script_path, proj_dir)
-        # So that bootstrap is not always run from Python 2
-        rewrite_shebang(osp.join(proj_dir, 'bootstrap'))
 
         old_dir = os.getcwd()
         print('cd {!r}'.format(method_dir))
@@ -67,18 +65,6 @@ def project(method):
 
 
 project.test_dir_cleared = False
-
-
-def rewrite_shebang(path):
-    with open(path) as f:
-        script = f.read()
-
-    python = osp.basename(sys.executable)
-    script = script.replace('#!/usr/bin/env python',
-                            '#!/usr/bin/env {}'.format(python))
-
-    with open(path, 'w') as f:
-        f.write(script)
 
 
 def list_dir(*path):
@@ -323,6 +309,8 @@ class Test(TestCase):
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
             from subprocess import check_call
 
+            python='python2'
+
             def post_bootstrap(**kwargs):
                 import py
 
@@ -352,7 +340,7 @@ class Test(TestCase):
             bootstrap('-s', name)
 
     @project
-    def test_venv_scripts(self, proj_dir, bootstrap):
+    def test_build_tool(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'setup.py'), '''\
             from setuptools import find_packages, setup
             setup(
@@ -364,10 +352,10 @@ class Test(TestCase):
             click
             '''.format(BASE_DIR))
 
-        scripts_dir = osp.join(proj_dir, 'scripts')
-        os.makedirs(scripts_dir)
+        build_tool_dir = osp.join(proj_dir, 'build-tool')
+        os.makedirs(build_tool_dir)
 
-        write_file(osp.join(scripts_dir, 'build.py'), '''\
+        write_file(osp.join(build_tool_dir, 'cli.py'), '''\
             import click
             from mollusc import sh
 
@@ -381,8 +369,8 @@ class Test(TestCase):
             def post_bootstrap(**kwargs):
                 from mollusc import venv
 
-                venv.add_path('scripts')
-                venv.add_script('build-wheel', 'build', 'build_wheel')
+                venv.add_path('build-tool')
+                venv.add_script('build-wheel', 'cli', 'build_wheel')
             ''')
         bootstrap('build-wheel')
         self.assertTrue(list_dir(proj_dir, 'dist', 'testproj-0.0.1*.whl'))

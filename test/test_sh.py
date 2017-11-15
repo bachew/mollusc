@@ -24,7 +24,7 @@ def sh2():
 
 
 @pytest.fixture
-def tmpdir2(tmpdir):
+def in_tmpdir(tmpdir):
     with tmpdir.as_cwd():
         yield tmpdir
 
@@ -85,7 +85,7 @@ class TestEnsureDir(object):
             sh.ensure_dir(tmpdir.join('file').strpath)
 
 
-def test_temp_dir(tmpdir2):
+def test_temp_dir(in_tmpdir):
     with sh.temp_dir() as path:
         assert osp.isdir(path)
 
@@ -128,7 +128,7 @@ def test_change_temp_dir(tmpdir):
 
 
 class TestCall(object):
-    def test_touch(self, sh2, tmpdir2):
+    def test_touch(self, sh2, in_tmpdir):
         error = sh2.call(['touch', 'touched.txt'])
         assert error == 0
         assert osp.exists('touched.txt')
@@ -183,3 +183,46 @@ class TestOutput(object):
     def test_stderr_to_stdout_echo(self, sh2):
         sh2.output(['bash', '-c', 'echo info'], check=False, stderr_to_stdout=True)
         assert sh2.stdout_first_line == '$((bash -c "echo info" >&2) || true)'
+
+
+class TestPath(object):
+    def test_path(self):
+        assert osp.isabs(sh.path('/a', 'b', 'c'))
+        assert not osp.isabs(sh.path('a', 'b', 'c'))
+
+    def test_abspath(self):
+        assert osp.isabs(sh.abspath('a', 'b', 'c'))
+
+    def test_relpath(self):
+        assert not osp.isabs(sh.relpath('/a', 'b', 'c'))
+
+
+class TestFileUtil(object):
+    def test_remove(self, in_tmpdir):
+        os.mkdir('dir')
+        sh.write('dir/file', '')
+        sh.write('file2', '')
+
+        sh.remove('dir')
+        sh.remove([])
+        sh.remove(['file2', 'file3'])
+        assert not osp.exists('dir')
+        assert not osp.exists('file2')
+
+    def test_glob_remove(self, in_tmpdir):
+        sh.write('.cache', '')
+        sh.write('config', '')
+        os.mkdir('build')
+        sh.write('build/build.log', '')
+        sh.write('build/package.tar.gz', '')
+
+        sh.remove('*')
+        assert osp.exists('.cache')
+        assert osp.exists('config')
+        assert osp.exists('build')
+
+        sh.remove(sh.glob('.*') + sh.glob(sh.path('build', '*.log')))
+        assert not osp.exists('.cache')
+        assert osp.exists('config')
+        assert not osp.exists('build/build.log')
+        assert osp.exists('build/package.tar.gz')

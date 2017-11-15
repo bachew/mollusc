@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import errno
+import glob
 import os
 import sys
 import shutil
@@ -8,6 +9,7 @@ import stat
 import subprocess
 import tempfile
 from contextlib import contextmanager
+from mollusc import util
 from os import path as osp
 from pprint import pformat
 from subprocess import list2cmdline
@@ -124,9 +126,9 @@ class Shell(object):
         try:
             return func(cmd, **kwargs)
         except subprocess.CalledProcessError as e:
-                cmdline = list2cmdline(cmd)
-                msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
-                raise self.CommandFailed(msg, e)
+            cmdline = list2cmdline(cmd)
+            msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
+            raise self.CommandFailed(msg, e)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 cmdline = list2cmdline(cmd)
@@ -137,7 +139,7 @@ class Shell(object):
 
     def write(self, path, data, echo=True):
         if echo:
-            self.echo('Writing {!r}'.format(osp.relpath(path)))
+            self.echo('Writing {!r}'.format(self.relpath(path)))
 
         # TODO: atomic write
         with open(path, 'w') as f:
@@ -145,17 +147,55 @@ class Shell(object):
 
     def chmod_x(self, path, echo=True):
         if echo:
-            self.echo('chmod +x {!r}'.format(osp.relpath(path)))
+            self.echo('chmod +x {!r}'.format(self.relpath(path)))
 
         mode = os.stat(path).st_mode
         os.chmod(path, mode | stat.S_IXGRP | stat.S_IXUSR | stat.S_IXOTH)
 
-    # TODO: path, rel_path
+    def path(self, *names):
+        return osp.join(*names)
+
+    def abspath(self, *names):
+        return osp.abspath(self.path(*names))
+
+    def relpath(self, *names):
+        return osp.relpath(self.path(*names))
+
+    def remove(self, paths, echo=True):
+        if paths is None:
+            return
+
+        def rm(path):
+            if echo:
+                self.echo('Removing {!r}'.format(self.relpath(path)))
+
+            try:
+                try:
+                    shutil.rmtree(path)
+                except OSError as e:
+                    if e.errno == errno.ENOTDIR:
+                        pass  # continue remove the file
+                    else:
+                        raise
+
+                os.remove(path)
+            except OSError as e:
+                if e.errno == errno.ENOENT:
+                    pass  # OK if not exists
+                else:
+                    raise
+
+        for path in util.list_not_str(paths):
+            rm(path)
+
+    def glob(self, path):
+        return list(glob.glob(path))
+
     # TODO: basename, split_path, merge_path, split_ext, merge_ext
     # TODO: is_file, is_dir, is_exec, is_readable, is_writable, etc
     # TODO: test, validate
     # TODO: list_dir, glob
-    # TODO: copy, rename, remove
+    # TODO: copy, rename
 
 
 class UnchangeDir(object):
