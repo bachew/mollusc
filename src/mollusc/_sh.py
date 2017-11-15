@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import six
+import stat
 import subprocess
 import tempfile
 from contextlib import contextmanager
@@ -134,11 +135,25 @@ class Shell(object):
             else:
                 raise
 
+    def write(self, path, data, echo=True):
+        if echo:
+            self.echo('Writing {!r}'.format(osp.relpath(path)))
+
+        # TODO: atomic write
+        with open(path, 'w') as f:
+            f.write(data)
+
+    def chmod_x(self, path, echo=True):
+        if echo:
+            self.echo('chmod +x {!r}'.format(osp.relpath(path)))
+
+        mode = os.stat(path).st_mode
+        os.chmod(path, mode | stat.S_IXGRP | stat.S_IXUSR | stat.S_IXOTH)
+
     # TODO: path, rel_path
     # TODO: basename, split_path, merge_path, split_ext, merge_ext
     # TODO: is_file, is_dir, is_exec, is_readable, is_writable, etc
     # TODO: test, validate
-    # TODO: read_file, write_file, append_file
     # TODO: list_dir, glob
     # TODO: copy, rename, remove
 
@@ -155,3 +170,6 @@ class UnchangeDir(object):
     def __exit__(self, *args):
         self.sh.echo('cd {!r}  # back from {!r}'.format(self.orig_dir, self.from_dir))
         os.chdir(self.orig_dir)
+
+
+sh = Shell()

@@ -6,6 +6,8 @@
 *.log
 __pycache__
 
+/build
+/dist
 /bootstrap_config_test.py
 
 *.sublime-*

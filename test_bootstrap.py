@@ -204,16 +204,50 @@ class Test(TestCase):
         run('bash', 'bootstrap.sh')
 
     @project
-    def test_pip_install_options(self, proj_dir, bootstrap):
+    def test_pip_config(self, proj_dir, bootstrap):
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            dev = True
+            pip_config = {
+            }
+            ''')
+        bootstrap()
+        self.assertTrue(list_dir(proj_dir, '.proj-py*', 'pip.conf'))
+
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            dev = True
+            pip_config = {
+                'global': {
+                    'index-url': 'https://testpypi.python.org/pypi/'
+                }
+            }
+            ''')
         write_file(osp.join(proj_dir, 'requirements.txt'), '''\
             kerberos==1.2.5
             ''')
-        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
-            dev = True
-            pip_install_options = ['-i', 'https://testpypi.python.org/pypi/']
-            ''')
         # kerberos==1.2.5 is not in testpypi
         self.assertRaises(CalledProcessError, bootstrap)
+
+    @project
+    def test_remove_pip_config(self, proj_dir, bootstrap):
+        def pip_config_exists():
+            return bool(list_dir(proj_dir, '.proj-py*', 'pip.conf'))
+
+        bootstrap()
+        self.assertFalse(pip_config_exists())
+
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            dev = True
+            pip_config = {
+            }
+            ''')
+        bootstrap()
+        self.assertTrue(pip_config_exists())
+
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            dev = True
+            ''')
+        bootstrap()
+        self.assertFalse(pip_config_exists())
 
     @project
     def test_config(self, proj_dir, bootstrap):
@@ -230,22 +264,22 @@ class Test(TestCase):
 
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
             python = 'python2'
-            pip_install_options = ['-i', 'https://testpypi.python.org/pypi/']
+            description = 'Configurable bootstrap'
             ''')
         output = bootstrap_list()
         self.assertTrue("python = 'python2'" in output)
-        self.assertTrue("pip_install_options = ['-i', 'https://testpypi.python.org/pypi/']" in output)
+        self.assertTrue("description = 'Configurable bootstrap'" in output)
 
         write_file(osp.join(proj_dir, 'bootstrap_config_test.py'), '''\
             import bootstrap_config
 
             dev = False  # release testing
-            pip_install_options = bootstrap_config.pip_install_options + ['-v']
+            description = 'Configurable bootstrap (test)'
             ''')
         output = bootstrap_list()
         self.assertTrue("python = 'python2'" in output)
         self.assertTrue("dev = False" in output)
-        self.assertTrue("pip_install_options = ['-i', 'https://testpypi.python.org/pypi/', '-v']" in output)
+        self.assertTrue("description = 'Configurable bootstrap (test)'" in output)
 
         os.remove(osp.join(proj_dir, 'bootstrap_config.py'))
         os.remove(osp.join(proj_dir, 'bootstrap_config_test.py'))
@@ -255,56 +289,39 @@ class Test(TestCase):
         self.assertTrue("dev = True" in output)
 
     @project
-    def test_venv_dir(self, proj_dir, bootstrap):
-        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
-            venv_dir = 'venv'
-            ''')
-        python = bootstrap()
-        self.assertTrue(osp.samefile(osp.join(proj_dir, 'venv/bin/python'), python))
-
-    @project
     def test_post_bootstrap(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
-            venv_dir = 'venv'
-
             def post_bootstrap(**kwargs):
                 with open('bootstrap.log', 'a') as f:
-                    f.write('post_bootstrap({})\\n'.format(format_kwargs(kwargs)))
-
-            def format_kwargs(kwargs):
-                return ', '.join(['{}={!r}'.format(k, v) for (k, v) in sorted(kwargs.items())])
+                    f.write('post_bootstrap(dev={!r})\\n'.format(kwargs['dev']))
             ''')
         write_file(osp.join(proj_dir, 'bootstrap_config_test.py'), '''\
             import bootstrap_config
 
+            dev = False
 
             def post_bootstrap(**kwargs):
                 bootstrap_config.post_bootstrap(**kwargs)
 
                 with open('bootstrap.log', 'a') as f:
-                    kwargs_str = bootstrap_config.format_kwargs(kwargs)
-                    f.write('post_bootstrap2({})\\n'.format(kwargs_str))
+                    f.write('post_bootstrap2(dev={!r})\\n'.format(kwargs['dev']))
             ''')
         bootstrap()
 
         with open(osp.join(proj_dir, 'bootstrap.log')) as f:
             exp_log = (
-                "post_bootstrap(clean=False, dev=True, venv_dir='venv')\n"
-                "post_bootstrap2(clean=False, dev=True, venv_dir='venv')\n"
+                "post_bootstrap(dev=False)\n"
+                "post_bootstrap2(dev=False)\n"
             )
             self.assertEqual(exp_log, f.read())
 
     @project
-    def test_activation(self, proj_dir, bootstrap):
+    def test_dynamic_requirements(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'requirements.txt'), '''\
             py
             ''')
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
             from subprocess import check_call
-
-
-            venv_dir = 'venv'
-
 
             def post_bootstrap(**kwargs):
                 import py
@@ -333,3 +350,39 @@ class Test(TestCase):
 
         for name in shells:
             bootstrap('-s', name)
+
+    @project
+    def test_venv_scripts(self, proj_dir, bootstrap):
+        write_file(osp.join(proj_dir, 'setup.py'), '''\
+            from setuptools import find_packages, setup
+            setup(
+                name='testproj',
+                version='0.0.1')
+            ''')
+        write_file(osp.join(proj_dir, 'requirements.txt'), '''\
+            {}
+            click
+            '''.format(BASE_DIR))
+
+        scripts_dir = osp.join(proj_dir, 'scripts')
+        os.makedirs(scripts_dir)
+
+        write_file(osp.join(scripts_dir, 'build.py'), '''\
+            import click
+            from mollusc import sh
+
+
+            @click.command()
+            def build_wheel():
+                sh.call(['python', 'setup.py', 'bdist_wheel'])
+            ''')
+
+        write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
+            def post_bootstrap(**kwargs):
+                from mollusc import venv
+
+                venv.add_path('scripts')
+                venv.add_script('build-wheel', 'build', 'build_wheel')
+            ''')
+        bootstrap('build-wheel')
+        self.assertTrue(list_dir(proj_dir, 'dist', 'testproj-0.0.1*.whl'))

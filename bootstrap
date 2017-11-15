@@ -17,31 +17,34 @@ from subprocess import list2cmdline
 
 
 class main(object):
-    VERSION = '0.0.2'
+    VERSION = '0.0.3'
     CONFIGURABLES = [
         'description',
         'python',
-        'venv_dir',  # TODO: remove this
         'bootstrap_requires',
         'dev',
-        'pip_install_options',
+        'pip_config',
         'post_bootstrap',
     ]
     DEFAULT_PYTHON = 'python3'
     ENCODING = sys.stdout.encoding or 'utf-8'
+    SUPPORTED_SHELLS = ['bash', 'csh', 'fish', 'zsh']
 
     def __init__(self):
         self.project_dir = osp.dirname(osp.abspath(__file__))
         self.project_name = osp.basename(self.project_dir)
+
+        self._python_version_cache = {}
+        self.venv_dir = osp.join(self.project_dir, '.{}-py{}'.format(self.project_name, self.python_version_str))
+
         self.bootstrap_requires = [
             'pip>=9.0.1',  # pip should be the first
             'setuptools>=36.0.1',
             'wheel>=0.29.0'
         ]
         self.dev = True
-        self.pip_install_options = []
+        self.pip_config = None
         self.post_bootstrap = None
-        self._python_version_cache = {}
 
         info('cd {!r}'.format(self.project_dir))
         os.chdir(self.project_dir)
@@ -126,17 +129,8 @@ class main(object):
         return cache[self.python]
 
     @property
-    def venv_dir(self):
-        if getattr(self, '_venv_dir', None):
-            return self._venv_dir
-
-        version_str = '.'.join([str(c) for c in self.python_version])
-        venv_dir = osp.relpath(osp.join(self.project_dir, '.{}-py{}'.format(self.project_name, version_str)))
-        return venv_dir
-
-    @venv_dir.setter
-    def venv_dir(self, value):
-        self._venv_dir = value
+    def python_version_str(self):
+        return '.'.join([str(c) for c in self.python_version])
 
     def load_config_module(self, mod_name):
         mod_file = '{}.py'.format(mod_name)
@@ -157,26 +151,14 @@ class main(object):
         info('{}: OK'.format(mod_file))
 
     def remove_config_pyc(self):
-        def rm(path):
-            try:
-                try:
-                    shutil.rmtree(path)
-                except OSError as e:
-                    if e.errno == errno.ENOTDIR:
-                        pass  # continue remove the file
-                    else:
-                        raise
+        paths = [
+            '__pycache__',
+            'bootstrap_config.pyc',
+            'bootstrap_config_test.pyc'
+        ]
 
-                os.remove(path)
-            except OSError as e:
-                if e.errno == errno.ENOENT:
-                    pass  # OK if not exists
-                else:
-                    raise
-
-        rm('__pycache__')
-        rm('bootstrap_config.pyc')
-        rm('bootstrap_config_test.pyc')
+        for path in paths:
+            remove(path, echo=False)
 
     def parse_args(self):
         parser = ArgumentParser(description=self.description,
@@ -196,14 +178,11 @@ class main(object):
         parser.add_argument('-p', dest='python',
                             help='python executable (default: {})'.format(self.python))
 
-        parser.add_argument('-d', dest='venv_dir',
-                            help='virtual environment directory (default: {})'.format(self.venv_dir))
-
         parser.add_argument('--version', action='store_true',
                             help='print bootstrap script version')
 
         parser.add_argument('-s', '--shell',
-                            choices=['bash', 'csh', 'fish', 'zsh'],
+                            choices=self.SUPPORTED_SHELLS,
                             help='start the specified shell with virtual environment activated')
 
         def boolean(s):
@@ -231,36 +210,27 @@ class main(object):
 
     def update_venv(self):
         in_venv = self.inside_venv()
-        venv_dir = self.venv_dir
 
         if self.clean:
             if in_venv:
                 raise BootstrapError('Cannot remove virtual environment because you are inside')
 
-            info('Removing virtual environment {!r}'.format(venv_dir))
-            try:
-                shutil.rmtree(venv_dir)
-            except OSError as e:
-                if e.errno == errno.ENOENT:
-                    pass
-                else:
-                    raise
+            remove(self.venv_dir)
 
         if not in_venv:
             info('Not inside virtual environment, create/updating one...')
 
             if self.python_version < (3, 0, 0):
-                self.run_virtualenv(venv_dir)
+                self.run_virtualenv()
             else:
-                self.run(['python3', '-m', 'venv', venv_dir])
+                self.run(['python3', '-m', 'venv', osp.relpath(self.venv_dir)])
 
             info('Activating virtual environment')
             self.activate_venv()
 
-        pip_install = ['pip', 'install']
+        self.configure_pip()
 
-        if self.pip_install_options:
-            pip_install += list(self.pip_install_options)
+        pip_install = ['pip', 'install']
 
         for req in list(self.bootstrap_requires):
             # Install one by one, order is important e.g. pip should be installed first
@@ -278,7 +248,7 @@ class main(object):
         if self.post_bootstrap:
             kwargs = {
                 'dev': self.dev,
-                'venv_dir': venv_dir,
+                'venv_dir': self.venv_dir,
                 'clean': self.clean,
             }
 
@@ -291,7 +261,8 @@ class main(object):
         if self.command:
             self.run(self.command)
         elif not in_venv:
-            info("\nPlease run '{} -s <shell>' to enter virtual environment".format(sys.argv[0]))
+            shell_choices = '|'.join(self.SUPPORTED_SHELLS)
+            info("\nPlease run '{} -s <{}>' to enter virtual environment".format(sys.argv[0], shell_choices))
 
     def run_shell(self, shell=None):
         mapping = {
@@ -305,7 +276,7 @@ class main(object):
     def run_bash(self):
         init_script = (
             'if [ -e ~/.bashrc ]; then . ~/.bashrc; fi\n'
-            '. "{}"\n'.format(osp.abspath(osp.join(self.venv_dir, 'bin/activate')))
+            '. "{}"\n'.format(osp.join(self.venv_dir, 'bin/activate'))
         )
 
         with self.temp_file(init_script) as path:
@@ -372,17 +343,42 @@ class main(object):
 
             raise
 
-    def run_virtualenv(self, venv_dir):
+    def run_virtualenv(self):
         cmd = ['virtualenv']
 
         # In Debian 8, virtualenv gives "ImportError: cannot import name HashMissing"
         # on existing virtual environment trying to reinstall pip
-        if osp.exists(osp.join(venv_dir, 'bin', 'pip')):
+        if osp.exists(osp.join(self.venv_dir, 'bin', 'pip')):
             cmd.append('--no-pip')
             cmd.append('--no-setuptools')
 
-        cmd.append(venv_dir)
+        cmd.append(self.venv_dir)
         self.run(cmd)
+
+    def configure_pip(self):
+        config_file = osp.join(self.venv_dir, 'pip.conf')
+
+        if self.pip_config is None:
+            remove(config_file)
+            return
+
+        config = []
+
+        for section_name, section in self.pip_config.items():
+            if not section:
+                continue
+
+            config.append('[{}]'.format(section_name))
+
+            for name, value in section.items():
+                config.append('{} = {}'.format(name, value))
+
+            config.append('')
+
+        info('Writing {!r}'.format(osp.relpath(config_file)))
+
+        with open(config_file, 'w') as f:
+            f.write('\n'.join(config))
 
     @contextmanager
     def temp_file(self, content):
@@ -402,6 +398,27 @@ class BootstrapError(Exception):
 def info(*msg):
     print(*msg)
     sys.stdout.flush()
+
+
+def remove(path, echo=True):
+    if echo:
+        info('Removing {!r}'.format(osp.relpath(path)))
+
+    try:
+        try:
+            shutil.rmtree(path)
+        except OSError as e:
+            if e.errno == errno.ENOTDIR:
+                pass  # continue remove the file
+            else:
+                raise
+
+        os.remove(path)
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            pass  # OK if not exists
+        else:
+            raise
 
 
 if __name__ == '__main__':

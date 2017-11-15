@@ -2,7 +2,7 @@
 import os
 import pytest
 import subprocess
-from mollusc import sh, Shell
+from mollusc._sh import sh, Shell
 from os import path as osp
 from pprint import pformat
 from six import StringIO
