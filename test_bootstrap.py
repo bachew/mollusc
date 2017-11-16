@@ -43,7 +43,7 @@ def project(method):
                 cmd.append(sys.executable)
 
             cmd.extend(args)
-            print('\n')  # easier to debug
+            print('\n# bootstrap')  # easier to debug
             run(*cmd)
 
             # glob() ignore hidden files if .* is not specified
@@ -326,9 +326,8 @@ class Test(TestCase):
         write_file(osp.join(proj_dir, 'requirements.txt'), '''\
             py
             ''')
-
         bootstrap('python', '-c', "import py; py.path.local('marker').write('')")
-        self.assertTrue(osp.exists(osp.join(proj_dir, 'marker')))
+        self.assertTrue(osp.exists('marker'))
 
     @project
     def test_shells(self, proj_dir, bootstrap):
@@ -340,7 +339,7 @@ class Test(TestCase):
             bootstrap('-s', name)
 
     @project
-    def test_build_tool(self, proj_dir, bootstrap):
+    def test_dev_tool(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'setup.py'), '''\
             from setuptools import find_packages, setup
             setup(
@@ -352,16 +351,20 @@ class Test(TestCase):
             click
             '''.format(BASE_DIR))
 
-        build_tool_dir = osp.join(proj_dir, 'build-tool')
+        build_tool_dir = osp.join(proj_dir, 'dev')
         os.makedirs(build_tool_dir)
 
         write_file(osp.join(build_tool_dir, 'cli.py'), '''\
             import click
+            import os
             from mollusc import sh
+            from os import path as osp
 
 
             @click.command()
             def build_wheel():
+                project_dir = sh.abspath(osp.dirname(__file__), '..')
+                os.chdir(project_dir)
                 sh.call(['python', 'setup.py', 'bdist_wheel'])
             ''')
 
@@ -369,8 +372,17 @@ class Test(TestCase):
             def post_bootstrap(**kwargs):
                 from mollusc import venv
 
-                venv.add_path('build-tool')
+                venv.add_path('dev')
                 venv.add_script('build-wheel', 'cli', 'build_wheel')
             ''')
         bootstrap('build-wheel')
         self.assertTrue(list_dir(proj_dir, 'dist', 'testproj-0.0.1*.whl'))
+
+    @project
+    def test_run_command_and_shell(self, proj_dir, bootstrap):
+        bootstrap('-s', 'bash', 'touch', 'x')
+        assert osp.exists('x')
+
+    @project
+    def test_no_venv_option(self, proj_dir, bootstrap):
+        self.assertRaises(CalledProcessError, bootstrap, '-ns', 'bash', 'touch', 'y')

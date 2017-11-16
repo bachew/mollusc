@@ -1,6 +1,9 @@
-# TODO
+# TODO list
 
-- mkdocs gh-deploy in travis-ci
-- Implement run_csh(), run_fish() and run_zsh()
+- `mkdocs gh-deploy` in Travis
+- Run `test_bootstrap` in Travis
+- Implement `Bootstrap.run_zsh()`
+- Implement `Bootstrap.run_fish()`
+- Implement `Bootstrap.run_csh()`
 - Make sure bootstrap pip by default cache downloads
-- Complete new-project.md
+- Documentation

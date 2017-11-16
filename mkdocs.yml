@@ -3,5 +3,10 @@ site_dir: .site
 docs_dir: src/doc
 
 pages:
-  - Intro: index.md
+  - About: index.md
+  - New project: new-project.md
+  - Bootstrap: bootstrap.md
+  - Shell scripting: shell.md
+  - Changelog: changelog.md
+  - Develop: dev.md
   - TODO: todo.md

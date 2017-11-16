@@ -17,7 +17,7 @@ from subprocess import CalledProcessError, list2cmdline
 
 
 class main(object):
-    VERSION = '0.0.4'
+    VERSION = '0.0.5'
     CONFIGURABLES = [
         'description',
         'python',
@@ -42,10 +42,9 @@ class main(object):
         self.pip_config = None
         self.post_bootstrap = None
 
-        script = osp.abspath(__file__)  # before cd
-
-        info('cd {!r}'.format(self.project_dir))
-        os.chdir(self.project_dir)
+        # Before change dir
+        self.script_file = osp.abspath(__file__)
+        orig_dir = change_dir(self.project_dir)
 
         # Remove residue pyc to prevent phantom config
         self.remove_config_pyc()
@@ -69,11 +68,12 @@ class main(object):
 
         # Now that we've got python version, let's check
         if sys.version_info[:3] != self.python_version:
-            info('\nSwitching bootstrap from Python {} to {}'.format(
+            info('Switching bootstrap from Python {} to {}'.format(
                 self.format_py_version(sys.version_info[:3]),
                 self.format_py_version(self.python_version)))
+            change_dir(orig_dir)
             try:
-                self.run([self.python, script] + sys.argv[1:])
+                self.run([self.python, self.script_file] + sys.argv[1:])
             except CalledProcessError as e:
                 exit_status = e.returncode
             else:
@@ -96,10 +96,18 @@ class main(object):
         self.command = args.command
 
         try:
-            if args.shell:
-                self.run_shell(args.shell)
+            if args.no_venv:
+                self.activate_venv()
             else:
                 self.update_venv()
+
+            change_dir(orig_dir)
+
+            if self.command:
+                self.run(self.command)
+
+            if args.shell:
+                self.run_shell(args.shell)
         except CalledProcessError:
             # No need extra message, command usually fails with verbose error
             raise SystemExit(1)
@@ -113,8 +121,8 @@ class main(object):
             return self._description
 
         return (
-            'bootstrap {} for development\n\n'
-            'For more info: https://github.com/bachew/mollusc').format(
+            'bootstrap {} for development, for more info:\n\n'
+            '  https://bachew.github.com/mollusc/bootstrap/').format(
             self.project_name)
 
     @description.setter
@@ -192,14 +200,13 @@ class main(object):
             parser.add_argument(on_opt, action='store_true', help=on_help + on_default)
             parser.add_argument(off_opt, action='store_true', help=off_help + off_default)
 
-        parser.add_argument('-p', dest='python',
-                            help='python executable (default: {})'.format(self.python))
-
         parser.add_argument('--version', action='store_true',
                             help='print bootstrap script version')
-
-        parser.add_argument('-s', '--shell',
-                            choices=self.SUPPORTED_SHELLS,
+        parser.add_argument('-p', '--python',
+                            help='python executable (default: {})'.format(self.python))
+        parser.add_argument('-n', '--no-venv', action='store_true',
+                            help="don't create or update virtual environment")
+        parser.add_argument('-s', '--shell', choices=self.SUPPORTED_SHELLS,
                             help='start the specified shell with virtual environment activated')
 
         def boolean(s):
@@ -226,23 +233,22 @@ class main(object):
         return args
 
     def update_venv(self):
-        in_venv = self.inside_venv()
+        was_in_venv = self.in_venv()
 
         if self.clean:
-            if in_venv:
+            if was_in_venv:
                 raise BootstrapError('Cannot remove virtual environment because you are inside')
 
             remove(self.venv_dir)
 
-        if not in_venv:
-            info('Not inside virtual environment, create/updating one...')
+        if not was_in_venv:
+            info('Not inside virtual environment, updating...')
 
             if self.python_version < (3, 0, 0):
                 self.run_virtualenv()
             else:
                 self.run(['python3', '-m', 'venv', osp.relpath(self.venv_dir)])
 
-            info('Activating virtual environment')
             self.activate_venv()
 
         self.configure_pip()
@@ -275,11 +281,10 @@ class main(object):
             finally:
                 os.chdir(work_dir)
 
-        if self.command:
-            self.run(self.command)
-        elif not in_venv:
+        if not self.command and not was_in_venv:
             shell_choices = '|'.join(self.SUPPORTED_SHELLS)
-            info("\nPlease run '{} -s <{}>' to enter virtual environment".format(sys.argv[0], shell_choices))
+            info("\nPlease run '{} -ns <{}>' to enter virtual environment".format(
+                osp.relpath(self.script_file), shell_choices))
 
     def run_shell(self, shell=None):
         mapping = {
@@ -311,23 +316,32 @@ class main(object):
         cmd = 'source {}'.format(osp.relpath(osp.join(self.venv_dir, 'bin/activate')))
         raise BootstrapError('zsh is not yet supported, please run {!r}'.format(cmd))
 
-    def inside_venv(self):
-        sys_version = sys.version.lower()
-
-        if 'conda' in sys_version or 'continuum' in sys_version:
+    def activate_venv(self):
+        if self.in_conda_venv():
             info("Inside Conda virtual environment")
             # It is also not possible to create virtual environment inside Condo virtual environment
-            return True
+            return
 
+        if self.in_normal_venv():
+            info('Inside virtual environment')
+            return
+
+        info('Activating virtual environment {!r}'.format(self.venv_dir))
+        self._activate_this()
+        assert self.in_venv()
+
+    def in_venv(self):
+        return self.in_conda_venv() or self.in_normal_venv()
+
+    def in_conda_venv(self):
+        sys_version = sys.version.lower()
+        return 'conda' in sys_version or 'continuum' in sys_version
+
+    def in_normal_venv(self):
         base_prefix = getattr(sys, 'real_prefix', None) or getattr(sys, 'base_prefix', sys.prefix)
+        return base_prefix != sys.prefix
 
-        if base_prefix == sys.prefix:
-            return False
-
-        info('Inside virtual environment')
-        return True
-
-    def activate_venv(self):
+    def _activate_this(self):
         # Modified from https://github.com/pypa/virtualenv/blob/master/virtualenv_embedded/activate_this.py
         old_os_path = os.environ.get('PATH', '')
         base = osp.abspath(self.venv_dir)
@@ -415,6 +429,16 @@ class BootstrapError(Exception):
 def info(*msg):
     print(*msg)
     sys.stdout.flush()
+
+
+def change_dir(path):
+    orig_dir = os.getcwd()
+
+    if osp.exists(path) and not osp.samefile(path, orig_dir):
+        info('cd {!r}'.format(path))
+        os.chdir(path)
+
+    return orig_dir
 
 
 def remove(path, echo=True):
