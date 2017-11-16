@@ -17,7 +17,7 @@ from subprocess import CalledProcessError, list2cmdline
 
 
 class main(object):
-    VERSION = '0.0.5'
+    VERSION = '0.0.6'
     CONFIGURABLES = [
         'description',
         'python',
@@ -94,6 +94,7 @@ class main(object):
 
         self.clean = args.clean
         self.command = args.command
+        self.shell = args.shell
 
         try:
             if args.no_venv:
@@ -106,8 +107,8 @@ class main(object):
             if self.command:
                 self.run(self.command)
 
-            if args.shell:
-                self.run_shell(args.shell)
+            if self.shell:
+                self.run_shell()
         except CalledProcessError:
             # No need extra message, command usually fails with verbose error
             raise SystemExit(1)
@@ -281,19 +282,19 @@ class main(object):
             finally:
                 os.chdir(work_dir)
 
-        if not self.command and not was_in_venv:
+        if not self.command and not self.shell and not was_in_venv:
             shell_choices = '|'.join(self.SUPPORTED_SHELLS)
             info("\nPlease run '{} -ns <{}>' to enter virtual environment".format(
                 osp.relpath(self.script_file), shell_choices))
 
-    def run_shell(self, shell=None):
+    def run_shell(self):
         mapping = {
             'bash': self.run_bash,
             'csh': self.run_csh,
             'fish': self.run_fish,
             'zsh': self.run_zsh,
         }
-        mapping[shell]()
+        mapping[self.shell]()
 
     def run_bash(self):
         init_script = (
