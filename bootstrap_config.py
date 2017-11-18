@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+python = 'python'
+
+
 def post_bootstrap(**kwargs):
     from mollusc import venv
 
