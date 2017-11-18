@@ -1,10 +1,12 @@
 language: python
 os:
   - linux
-  - osx
+  #- osx  # broken: https://github.com/travis-ci/travis-ci/issues/4729
+  #- windows  # not supported: https://github.com/travis-ci/travis-ci/issues/2104
 addons:
-  packages:
-    - python3-venv
+  apt:
+    packages:
+      - python3-venv
 script:
   - ./bootstrap dev build
 branches:
