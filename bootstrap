@@ -17,7 +17,7 @@ from subprocess import CalledProcessError, list2cmdline
 
 
 class main(object):
-    VERSION = '0.0.6'
+    VERSION = '0.0.7'
     CONFIGURABLES = [
         'description',
         'python',
@@ -100,7 +100,7 @@ class main(object):
             if args.no_venv:
                 self.activate_venv()
             else:
-                self.update_venv()
+                self.create_activate_venv()
 
             change_dir(orig_dir)
 
@@ -233,7 +233,7 @@ class main(object):
         args = parser.parse_args()
         return args
 
-    def update_venv(self):
+    def create_activate_venv(self):
         was_in_venv = self.in_venv()
 
         if self.clean:
@@ -243,7 +243,7 @@ class main(object):
             remove(self.venv_dir)
 
         if not was_in_venv:
-            info('Not inside virtual environment, updating...')
+            info('Not inside virtual environment, creating one')
 
             if self.python_version < (3, 0, 0):
                 self.run_virtualenv()
@@ -265,6 +265,9 @@ class main(object):
                 self.run(pip_install + ['-e', '.'])
             else:
                 self.run(pip_install + ['-U', '.'])
+
+        # TODO: split activate_venv() into update_os_path() and update_sys_paths()
+        self._activate_this()
 
         if self.dev and osp.exists('requirements.txt'):
             self.run(pip_install + ['-r', 'requirements.txt'])

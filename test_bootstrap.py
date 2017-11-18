@@ -339,22 +339,23 @@ class Test(TestCase):
             bootstrap('-s', name)
 
     @project
-    def test_dev_tool(self, proj_dir, bootstrap):
+    def test_dev_script(self, proj_dir, bootstrap):
         write_file(osp.join(proj_dir, 'setup.py'), '''\
             from setuptools import find_packages, setup
             setup(
                 name='testproj',
-                version='0.0.1')
+                version='0.0.1',
+                packages=find_packages('src'),
+                package_dir={'': 'src'})
             ''')
         write_file(osp.join(proj_dir, 'requirements.txt'), '''\
             {}
             click
             '''.format(BASE_DIR))
 
-        build_tool_dir = osp.join(proj_dir, 'dev')
-        os.makedirs(build_tool_dir)
-
-        write_file(osp.join(build_tool_dir, 'cli.py'), '''\
+        dev_dir = osp.join(proj_dir, 'dev')
+        os.makedirs(dev_dir)
+        write_file(osp.join(dev_dir, 'cli.py'), '''\
             import click
             import os
             from mollusc import sh
@@ -368,14 +369,19 @@ class Test(TestCase):
                 sh.call(['python', 'setup.py', 'bdist_wheel'])
             ''')
 
+        src_dir = osp.join(proj_dir, 'src')
+        os.makedirs(src_dir)
+        write_file(osp.join(src_dir, 'chicken_and_egg.py'), '')
+
         write_file(osp.join(proj_dir, 'bootstrap_config.py'), '''\
             def post_bootstrap(**kwargs):
+                import chicken_and_egg
                 from mollusc import venv
 
                 venv.add_path('dev')
                 venv.add_script('build-wheel', 'cli', 'build_wheel')
             ''')
-        bootstrap('build-wheel')
+        bootstrap('--clean', 'build-wheel')
         self.assertTrue(list_dir(proj_dir, 'dist', 'testproj-0.0.1*.whl'))
 
     @project

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 import click
 from mollusc import sh
 from os import path as osp
@@ -16,8 +15,8 @@ def main():
     sh.change_dir(PROJECT_DIR)
 
 
-@main.command('build')
-def build():
+@main.command()
+def pythons():
     for python in ['python', 'python2', 'python2.7', 'python3', 'python3.4', 'python3.5', 'python3.6']:
         try:
             sh.call([python, '--version'])

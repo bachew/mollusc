@@ -5,5 +5,6 @@ python = 'python'
 def post_bootstrap(**kwargs):
     from mollusc import venv
 
-    venv.add_path('dev')
-    venv.add_script('dev', 'cli', 'main')
+    if kwargs['dev']:
+        venv.add_path('dev')
+        venv.add_script('dev', 'cli', 'main')
