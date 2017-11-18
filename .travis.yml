@@ -1,4 +1,10 @@
 language: python
+os:
+  - linux
+  - osx
+addons:
+  packages:
+    - python3-venv
 script:
   - ./bootstrap dev build
 branches:
