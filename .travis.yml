@@ -1,6 +1,6 @@
 language: python
 script:
-  - dev build
+  - ./bootstrap dev build
 branches:
   only:
     - master
