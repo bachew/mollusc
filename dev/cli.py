@@ -11,21 +11,15 @@ CONTEXT_SETTINGS = {
 }
 
 
-class BuildFailed(Exception):
-    pass
-
-
 @click.group(context_settings=CONTEXT_SETTINGS)
 def main():
-    '''
-    Build tool for Mollusc.
-    '''
     sh.change_dir(PROJECT_DIR)
 
 
-@main.command('doc')
-def doc():
-    '''
-    Serve doc on localhost for browser preview.
-    '''
-    sh.call(['mkdocs', 'serve'])
+@main.command('build')
+def build():
+    for python in ['python', 'python2', 'python2.7', 'python3', 'python3.4', 'python3.5', 'python3.6']:
+        try:
+            sh.call([python, '--version'])
+        except sh.CommandNotFound:
+            sh.echo('command not found')

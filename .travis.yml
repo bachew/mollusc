@@ -1,11 +1,9 @@
+language: python
+script:
+  - dev build
 branches:
   only:
-  - master
-language: python
-python:
-- '2.7'
-- '3.4'
-script: tox
+    - master
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
@@ -14,4 +12,4 @@ deploy:
   password:
     secure: "Np8ZthTCScgOGlbxFbwx1ahI1U8qQIngwuLY2MCMFCcWoFvI/PxmMfFTSutz/ZrxG2Z+IJ18FBilnwdI0LQJrNhgtroyAW2WnD7SVFse+fx442jUJURqtM+WGEFB6lJi1vhPpPQ2MzaHn/XF0A9ZPycIBEU6VNknljTXLQXqFH8xknUj4rw+JGZTrH+541X20ZN6cQ7W+m4/UDSkPRwc27MA4u2HS591F/AHFeCHDFQ9ZO/PiGaQCPm7Q20BC186qQ49LQF/a5ZKuqyM+tWTtHrK3SHdgEBmbt2vMM6sHjZ1jyAwCw4XrNx/xJaKtITroF71zJPSFZplWsJw8pX5QD7w65nTd5/UXkc26gyD1PnbMCwIFsu9n7yW4WXlWmEnTNpMDDeud6TDqkZuY8zfSjMpmTrgRAtQUL98OiXQPqLyCPjXAW62Uow7eYXtj44QecBUB2H0jJBVq8zGVOU2zPmURRm3qrApQOeLlxKd5ZdmlLmFILoPCdXauvB0FHuSfUARXXkR8tfUU7SQSnrqj0iof0yn7BIJnbhuI+8SZHaRuBP+4Xd0wfORX14TEpbgcdFU/ndAVw4We0hlHWrSIL19tU9TVz8X+p+U+V92FXYoH35XT681Q9ii9RD6pYZ2TT3gP+g6FuofzH927nT2FPXDkMDYppPOM7darheZ5Rs="
   on:
-    condition: $TRAVIS_PYTHON_VERSION = "2.7"
+    condition: $TRAVIS_PYTHON_VERSION = "2.7 (NO_DEPLOY)"
