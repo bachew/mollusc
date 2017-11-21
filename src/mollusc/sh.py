@@ -23,9 +23,10 @@ class ShellError(Exception):
 
 
 class CommandFailed(ShellError):
-    def __init__(self, msg, orig_error):
+    def __init__(self, cmdline, call_error):
+        msg = 'Command {!r} failed with error code {!r}'.format(cmdline, call_error.returncode)
         super(CommandFailed, self).__init__(msg)
-        self.orig_error = orig_error
+        self.output = call_error.output
 
 
 class CommandNotFound(ShellError):
@@ -108,7 +109,7 @@ class Shell(object):
             if check:
                 raise
             else:
-                output = e.orig_error.output
+                output = e.output
 
         return output.decode(self.encoding)
 
@@ -135,9 +136,7 @@ class Shell(object):
         try:
             return func(cmd, **kwargs)
         except subprocess.CalledProcessError as e:
-            cmdline = list2cmdline(cmd)
-            msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
-            raise CommandFailed(msg, e)
+            raise CommandFailed(list2cmdline(cmd), e)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 msg = 'Command {!r} not found, did you install it?'.format(cmd[0])
