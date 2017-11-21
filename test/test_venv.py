@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import pytest
-from mollusc._sh import sh
-from mollusc._venv import VirtualEnv
+from mollusc import sh
+from mollusc.venv import VirtualEnv
 from os import path as osp
 
 

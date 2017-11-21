@@ -2,14 +2,14 @@
 import os
 import pytest
 import subprocess
-from mollusc._sh import sh, Shell
+from mollusc import sh
 from os import path as osp
 from pprint import pformat
 from six import StringIO
 from textwrap import dedent
 
 
-class Shell2(Shell):
+class Shell2(sh.Shell):
     def __init__(self):
         super(Shell2, self).__init__(StringIO(), StringIO())
 
@@ -95,12 +95,12 @@ def test_temp_dir(in_tmpdir):
 class TestChangeDir(object):
     def test_call(self, tmpdir):
         orig_dir = os.getcwd()
-        assert osp.samefile(sh.working_dir, orig_dir)
+        assert osp.samefile(sh.working_dir(), orig_dir)
         sh.change_dir(tmpdir.strpath)
 
         try:
             assert osp.samefile(tmpdir.strpath, os.getcwd())
-            assert osp.samefile(tmpdir.strpath, sh.working_dir)
+            assert osp.samefile(tmpdir.strpath, sh.working_dir())
         finally:
             os.chdir(orig_dir)
 
@@ -147,9 +147,9 @@ class TestCall(object):
 
     def test_command_not_found(self):
         with pytest.raises(sh.CommandNotFound) as exc_info:
-            sh.call(['no-such-command-lah'], check=False)
+            sh.call(['no-such-command', '-lah'], check=False)
 
-        exc_info.match(r"Command 'no-such-command-lah' not found, did you install it\?")
+        exc_info.match(r"Command 'no-such-command' not found, did you install it\?")
 
     def test_stderr_to_stdout(self, sh2):
         sh2.call(['bash', '-c', 'echo info'], stderr=subprocess.STDOUT)

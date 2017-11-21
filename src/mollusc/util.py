@@ -10,3 +10,14 @@ def list_not_str(obj):
         return list(obj)
 
     return [obj]
+
+
+def make_object_module(mod, obj):
+    for key in dir(obj):
+        if key.startswith('_'):
+            continue
+
+        value = getattr(obj, key)
+
+        if callable(value):
+            mod[key] = value

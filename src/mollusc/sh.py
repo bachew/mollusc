@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import errno
-import glob
+import glob as globlib
 import os
 import sys
 import shutil
@@ -15,16 +15,24 @@ from pprint import pformat
 from subprocess import list2cmdline
 
 
+DEFAULT_ENCODING = 'utf-8'
+
+
+class ShellError(Exception):
+    pass
+
+
+class CommandFailed(ShellError):
+    def __init__(self, msg, orig_error):
+        super(CommandFailed, self).__init__(msg)
+        self.orig_error = orig_error
+
+
+class CommandNotFound(ShellError):
+    pass
+
+
 class Shell(object):
-    DEFAULT_ENCODING = 'utf-8'
-
-    class CommandFailed(Exception):
-        def __init__(self, msg, orig_error):
-            super(Shell.CommandFailed, self).__init__(msg)
-            self.orig_error = orig_error
-
-    class CommandNotFound(Exception):
-        pass
 
     def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
@@ -33,7 +41,7 @@ class Shell(object):
         def get_enc(f):
             return getattr(f, 'encoding', None)
 
-        self.encoding = get_enc(stdout) or get_enc(stderr) or self.DEFAULT_ENCODING
+        self.encoding = get_enc(stdout) or get_enc(stderr) or DEFAULT_ENCODING
 
     def echo(self, msg, error=False, end='\n', flush=True):
         s = self.format_message(msg)
@@ -68,13 +76,12 @@ class Shell(object):
         finally:
             shutil.rmtree(path)
 
-    @property
     def working_dir(self):
         return os.getcwd()
 
     def change_dir(self, path):
         self.echo('cd {!r}'.format(path))
-        unchanger = UnchangeDir(self, self.working_dir, path)
+        unchanger = UnchangeDir(self, self.working_dir(), path)
         os.chdir(path)
         return unchanger
 
@@ -97,7 +104,7 @@ class Shell(object):
 
         try:
             output = self._call(subprocess.check_output, cmd, **kwargs)
-        except self.CommandFailed as e:
+        except CommandFailed as e:
             if check:
                 raise
             else:
@@ -110,6 +117,8 @@ class Shell(object):
 
         if stderr_to_stdout:
             kwargs['stderr'] = subprocess.STDOUT
+
+        # TODO: null_stdin
 
     def _cmdline_echo(self, cmd, check, kwargs):
         cmdline = list2cmdline(cmd)
@@ -128,12 +137,11 @@ class Shell(object):
         except subprocess.CalledProcessError as e:
             cmdline = list2cmdline(cmd)
             msg = 'Command {!r} failed with error code {!r}'.format(cmdline, e.returncode)
-            raise self.CommandFailed(msg, e)
+            raise CommandFailed(msg, e)
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
-                cmdline = list2cmdline(cmd)
-                msg = 'Command {!r} not found, did you install it?'.format(cmdline)
-                six.raise_from(self.CommandNotFound(msg), e)
+                msg = 'Command {!r} not found, did you install it?'.format(cmd[0])
+                six.raise_from(CommandNotFound(msg), e)
             else:
                 raise
 
@@ -189,12 +197,12 @@ class Shell(object):
             rm(path)
 
     def glob(self, path):
-        return list(glob.glob(path))
+        return list(globlib.glob(path))
 
     # TODO: basename, split_path, merge_path, split_ext, merge_ext
     # TODO: is_file, is_dir, is_exec, is_readable, is_writable, etc
     # TODO: test, validate
-    # TODO: list_dir, glob
+    # TODO: list_dir
     # TODO: copy, rename
 
 
@@ -212,4 +220,4 @@ class UnchangeDir(object):
         os.chdir(self.orig_dir)
 
 
-sh = Shell()
+util.make_object_module(locals(), Shell())

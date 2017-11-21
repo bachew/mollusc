@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import errno
 import sys
-from mollusc import sh
+from mollusc import sh, util
 from os import path as osp
 
 
@@ -67,4 +67,4 @@ class VirtualEnv(object):
         sh.chmod_x(script_file, echo=False)
 
 
-venv = VirtualEnv()
+util.make_object_module(locals(), VirtualEnv())

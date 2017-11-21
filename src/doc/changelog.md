@@ -3,6 +3,11 @@
 We follow semantic versioning except for versions less than 0.1.
 
 
+## mollusc 0.0.5.dev
+
+- Convert `mollusc.sh.working_dir` from property to function
+
+
 ## [bootstrap 0.0.6 - 2017-11-17](https://github.com/bachew/mollusc/commit/3f6a64e4b96cc52717d612295d5c109304b4c230)
 
 - Improved help

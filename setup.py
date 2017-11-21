@@ -9,7 +9,7 @@ modules = [osp.splitext(osp.basename(path))[0]
            for path in glob(osp.join(proj_dir, 'src/*.py'))]
 config = {
     'name': 'mollusc',
-    'version': '0.0.4',
+    'version': '0.0.5.dev',
     'description': 'Bootstrap your Python projects',
     'license': 'MIT',
     'author': 'Chew Boon Aik',
@@ -32,7 +32,6 @@ config = {
         'Programming Language :: Python :: 3',
         'Topic :: Software Development :: Build Tools',
         'Topic :: Utilities',
-
     ],
 }
 setup(**config)
