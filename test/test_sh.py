@@ -14,8 +14,16 @@ class Shell2(sh.Shell):
         super(Shell2, self).__init__(StringIO(), StringIO())
 
     @property
+    def stdout_str(self):
+        return self.stdout.getvalue()
+
+    @property
+    def stderr_str(self):
+        return self.stderr.getvalue()
+
+    @property
     def stdout_first_line(self):
-        return self.stdout.getvalue().splitlines()[0]
+        return self.stdout_str.splitlines()[0]
 
 
 @pytest.fixture
@@ -36,21 +44,21 @@ class TestEcho(object):
 
     def test_stdout_stderr(self, sh2):
         sh2.echo('Message')
-        assert sh2.stdout.getvalue() == 'Message\n'
-        assert sh2.stderr.getvalue() == ''
+        assert sh2.stdout_str == 'Message\n'
+        assert sh2.stderr_str == ''
         sh2.echo('Error', error=True)
-        assert sh2.stdout.getvalue() == 'Message\n'
-        assert sh2.stderr.getvalue() == 'Error\n'
+        assert sh2.stdout_str == 'Message\n'
+        assert sh2.stderr_str == 'Error\n'
 
     def test_byte_string(self, sh2):
         sh2.echo(u'人'.encode('utf8'))
-        assert sh2.stdout.getvalue() == u'人\n'
+        assert sh2.stdout_str == u'人\n'
 
     def test_line_end(self, sh2):
         sh2.echo('Downloading...', end='')
-        assert sh2.stdout.getvalue() == 'Downloading...'
+        assert sh2.stdout_str == 'Downloading...'
         sh2.echo(' done')
-        assert sh2.stdout.getvalue() == 'Downloading... done\n'
+        assert sh2.stdout_str == 'Downloading... done\n'
 
     def test_pprint(self, sh2):
         obj = {
@@ -62,7 +70,7 @@ class TestEcho(object):
             ]
         }
         sh2.echo(obj, end='')
-        assert sh2.stdout.getvalue() == pformat(obj)
+        assert sh2.stdout_str == pformat(obj)
 
 
 class TestEnsureDir(object):
@@ -114,7 +122,7 @@ class TestChangeDir(object):
         with sh2.change_dir(tmpdir.strpath):
             pass
 
-        assert sh2.stdout.getvalue() == dedent('''\
+        assert sh2.stdout_str == dedent('''\
             cd {!r}
             cd {!r}  # back from {!r}
             ''').format(tmpdir.strpath, orig_dir, tmpdir.strpath)
@@ -187,14 +195,21 @@ class TestOutput(object):
 
 class TestPath(object):
     def test_path(self):
-        assert osp.isabs(sh.path('/a', 'b', 'c'))
-        assert not osp.isabs(sh.path('a', 'b', 'c'))
+        assert sh.path('/usr', 'bin', 'env') == '/usr/bin/env'
+        assert sh.path('build', 'lib', 'mollusc') == 'build/lib/mollusc'
 
-    def test_abspath(self):
-        assert osp.isabs(sh.abspath('a', 'b', 'c'))
+    def test_relative(self):
+        assert sh.path(os.getcwd(), 'dist', rel=True) == 'dist'
+        assert sh.path('/tmp/gnome-software-RSVW9Y', rel='/tmp') == 'gnome-software-RSVW9Y'
 
-    def test_relpath(self):
-        assert not osp.isabs(sh.relpath('/a', 'b', 'c'))
+    def test_absolute(self):
+        assert sh.path('.travis.yml', rel=False) == osp.abspath('.travis.yml')
+
+    def test_unknown_kwarg(self):
+        with pytest.raises(TypeError) as exc_info:
+            sh.path('.', abs=True)
+
+        exc_info.match(r"Unknown kwargs \['abs'\]")
 
 
 class TestFileUtil(object):

@@ -5,7 +5,9 @@ We follow semantic versioning except for versions less than 0.1.
 
 ## mollusc 0.0.5.dev
 
-- Convert `mollusc.sh.working_dir` from property to function
+- Convert `sh.working_dir` from property to function
+- Added `rel` keyword arg into `sh.path()`
+- Removed `sh.abspath()` and `sh.relpath()`
 
 
 ## [bootstrap 0.0.6 - 2017-11-17](https://github.com/bachew/mollusc/commit/3f6a64e4b96cc52717d612295d5c109304b4c230)
@@ -24,11 +26,11 @@ We follow semantic versioning except for versions less than 0.1.
 
 Added:
 
-- `mollusc.sh.path`
-- `mollusc.sh.abspath`
-- `mollusc.sh.relpath`
-- `mollusc.sh.remove`
-- `mollusc.sh.glob`
+- `sh.path`
+- `sh.abspath`
+- `sh.relpath`
+- `sh.remove`
+- `sh.glob`
 
 
 ## [bootstrap 0.0.4 - 2017-11-15](https://github.com/bachew/mollusc/commit/04a2343bcbfb960b9407fcd059af07b6a8248b90)

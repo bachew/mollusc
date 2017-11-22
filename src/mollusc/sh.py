@@ -34,7 +34,6 @@ class CommandNotFound(ShellError):
 
 
 class Shell(object):
-
     def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
         self.stderr = stderr
@@ -144,6 +143,25 @@ class Shell(object):
             else:
                 raise
 
+    def path(self, *path, **kwargs):
+        rel = kwargs.pop('rel', None)
+
+        if kwargs:
+            raise TypeError('Unknown kwargs {!r}'.format(list(kwargs.keys())))
+
+        pathstr = osp.join(*path)
+
+        if rel is None:
+            return pathstr
+
+        if rel is True:
+            return osp.relpath(pathstr)
+
+        if rel is False:
+            return osp.abspath(pathstr)
+
+        return osp.relpath(pathstr, str(rel))
+
     def write(self, path, data, echo=True):
         if echo:
             self.echo('Writing {!r}'.format(self.relpath(path)))
@@ -158,15 +176,6 @@ class Shell(object):
 
         mode = os.stat(path).st_mode
         os.chmod(path, mode | stat.S_IXGRP | stat.S_IXUSR | stat.S_IXOTH)
-
-    def path(self, *names):
-        return osp.join(*names)
-
-    def abspath(self, *names):
-        return osp.abspath(self.path(*names))
-
-    def relpath(self, *names):
-        return osp.relpath(self.path(*names))
 
     def remove(self, paths, echo=True):
         if paths is None:
