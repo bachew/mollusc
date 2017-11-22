@@ -1,6 +1,6 @@
 site_name: Mollusc
 site_dir: .site
-docs_dir: src/doc
+docs_dir: doc
 
 pages:
   - About: index.md

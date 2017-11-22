@@ -23,7 +23,7 @@ os.environ['PIP_DOWNLOAD_CACHE'] = osp.join(BASE_DIR, '.pip-cache')
 def project(method):
     @functools.wraps(method)
     def wrapped(test_case):
-        test_dir = osp.join(BASE_DIR, '.bootstrap-test')
+        test_dir = osp.join(BASE_DIR, '.test-bootstrap')
 
         # Clear once per test run
         if not project.test_dir_cleared and osp.exists(test_dir):
