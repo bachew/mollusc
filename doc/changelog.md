@@ -8,6 +8,7 @@ We follow semantic versioning except for versions less than 0.1.
 - Convert `sh.working_dir` from property to function
 - Added `rel` keyword arg into `sh.path()`
 - Removed `sh.abspath()` and `sh.relpath()`
+- Add `mollusc.dist:Twine`
 
 
 ## [bootstrap 0.0.6 - 2017-11-17](https://github.com/bachew/mollusc/commit/3f6a64e4b96cc52717d612295d5c109304b4c230)

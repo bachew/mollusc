@@ -164,7 +164,7 @@ class Shell(object):
 
     def write(self, path, data, echo=True):
         if echo:
-            self.echo('Writing {!r}'.format(self.relpath(path)))
+            self.echo('Writing {!r}'.format(osp.relpath(path)))
 
         # TODO: atomic write
         with open(path, 'w') as f:
@@ -172,7 +172,7 @@ class Shell(object):
 
     def chmod_x(self, path, echo=True):
         if echo:
-            self.echo('chmod +x {!r}'.format(self.relpath(path)))
+            self.echo('chmod +x {!r}'.format(osp.relpath(path)))
 
         mode = os.stat(path).st_mode
         os.chmod(path, mode | stat.S_IXGRP | stat.S_IXUSR | stat.S_IXOTH)
@@ -183,7 +183,7 @@ class Shell(object):
 
         def rm(path):
             if echo:
-                self.echo('Removing {!r}'.format(self.relpath(path)))
+                self.echo('Removing {!r}'.format(osp.relpath(path)))
 
             try:
                 try:

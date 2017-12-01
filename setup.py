@@ -23,11 +23,12 @@ config = {
         'six>=1.11.0',
     ],
     'zip_safe': False,
+    'include_package_data': True,  # see MANIFEST.in
     'classifiers': [
         'Development Status :: 4 - Beta',
         'Environment :: Console',
         'License :: OSI Approved :: MIT License',
-        'Operating System :: Unix',
+        'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Topic :: Software Development :: Build Tools',
