@@ -11,5 +11,6 @@ __pycache__
 /tmp
 
 /bootstrap_config_test.py
+/Dockerfile
 
 *.sublime-*

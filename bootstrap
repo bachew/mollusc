@@ -147,8 +147,7 @@ class main(object):
 
         if self.python not in cache:
             # Python 2.7 prints version to stderr
-            output = subprocess.check_output([self.python, '--version'],
-                                             stderr=subprocess.STDOUT)
+            output = subprocess.check_output([self.python, '--version'], stderr=subprocess.STDOUT)
             output = output.decode(self.ENCODING)
             m = re.match(r'.*(\d+)\.(\d+)\.(\d+).*', output.strip())
             cache[self.python] = int(m.group(1)), int(m.group(2)), int(m.group(3))

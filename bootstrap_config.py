@@ -6,4 +6,4 @@ def post_bootstrap(**kwargs):
 
     if kwargs['dev']:
         venv.add_path('.')
-        venv.add_script('dev', 'dev', 'main')
+        venv.add_script('dev', 'dev', 'cli')
