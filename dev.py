@@ -37,4 +37,4 @@ def deploy_wheel(username):
 
 @main.command('deploy-doc')
 def deploy_doc():
-    sh.call(['mkdocs', 'gh-deploy'])
+    sh.call(['mkdocs', 'gh-deploy', '--force'])
