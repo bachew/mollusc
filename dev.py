@@ -11,11 +11,14 @@ def main():
     sh.change_dir(osp.dirname(__file__))
 
 
-@main.command('build')
-def build():
+@main.command('test')
+def test():
     sh.remove('.tox')
     sh.call(['tox'])
 
+
+@main.command('build')
+def build():
     sh.remove(['build', 'dist'])
     sh.remove(sh.glob(sh.path('src', '*.egg.info')))
     sh.call(['python', 'setup.py', 'build', 'bdist_wheel'])

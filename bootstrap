@@ -190,17 +190,6 @@ class main(object):
         parser = ArgumentParser(description=self.description,
                                 formatter_class=RawDescriptionHelpFormatter)
 
-        def add_flag(key, on_opt, on_help, off_opt, off_help):
-            if getattr(self, key):
-                on_default = ' (default)'
-                off_default = ''
-            else:
-                on_default = ''
-                off_default = ' (default)'
-
-            parser.add_argument(on_opt, action='store_true', help=on_help + on_default)
-            parser.add_argument(off_opt, action='store_true', help=off_help + off_default)
-
         parser.add_argument('--version', action='store_true',
                             help='print bootstrap script version')
         parser.add_argument('-p', '--python',

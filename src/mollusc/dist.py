@@ -25,7 +25,6 @@ class Twine(object):
 
     def call(self, subcmd, args=[], options={}):
         cmd = self.get_command(subcmd, args, options)
-        env = os.environ.copy()
 
         if not self.password and not self.password_in_keyring:
             target = '{!r} in {!r}'.format(self.username, self.repo_url)
@@ -39,7 +38,11 @@ class Twine(object):
             else:
                 raise NoCredentials(msg)
 
-        env['TWINE_PASSWORD'] = self.password
+        env = os.environ.copy()
+
+        if self.password:
+            env['TWINE_PASSWORD'] = self.password
+
         sh.call(cmd, env=env)
 
     def get_command(self, subcmd, args, options):

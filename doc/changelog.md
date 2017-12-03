@@ -3,7 +3,11 @@
 We follow semantic versioning except for versions less than 0.1.
 
 
-## mollusc 0.0.5.dev
+## [bootstrap 0.0.7 - 2017-12-03]
+
+- Refactored unit tests
+
+## [mollusc 0.0.5 - 2017-12-03]
 
 - Convert `sh.working_dir` from property to function
 - Added `rel` keyword arg into `sh.path()`
