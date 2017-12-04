@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import click
 import docker
+import os
 from mollusc import sh
 from mollusc.dist import Twine
 from os import path as osp
-from textwrap import dedent
 
 
 @click.group(chain=True,
@@ -29,12 +29,6 @@ def cli_build():
     sh.call(['mkdocs', 'build'])
 
 
-@cli.command('docker')
-def cli_docker():
-    platforms = Platforms()
-    platforms.build_all()
-
-
 @cli.command('deploy-wheel')
 @click.option('-u', '--username')
 def cli_deploy_wheel(username):
@@ -48,70 +42,70 @@ def cli_deploy_doc():
     sh.call(['mkdocs', 'gh-deploy', '--force'])
 
 
-class Platforms(object):
+@cli.command('build-image')
+@click.option('--rebuild', is_flag=True, help='Rebuild if base image already exists')
+@click.argument('platform', nargs=-1)
+def cli_build_image(platform, rebuild):
+    docker = Docker()
+    test_suffix = '-test'
+    platf_names = platform or [n for n in os.listdir('docker') if n.endswith(test_suffix)]
+
+    try:
+        for platf_name in platf_names:
+            if platf_name.endswith(test_suffix):
+                base_platf_name = platf_name[:-len(test_suffix)]
+                test_platf_name = platf_name
+            else:
+                base_platf_name = platf_name
+                test_platf_name = None
+
+            if base_platf_name:
+                if rebuild:
+                    docker.remove_image(base_platf_name)  # TODO: image name
+
+                docker.build_image(base_platf_name)
+
+            if test_platf_name:
+                docker.remove_image(test_platf_name)  # TODO: image name
+                docker.build_image(test_platf_name, '.')
+    finally:
+        docker.remove_dangling_images()
+
+
+class Docker(object):
+    IMAGE_PREFIX = 'mollusc-'
+
     def __init__(self):
-        self.all = [
-            Debian('stable')
-        ]
         self.docker = docker.from_env()
 
-    def build_all(self):
-        for platform in self.all:
-            self.build(platform)
-
-    def build(self, platform):
-        self.build_image(platform)
-        platform.build()
-
-    def build_image(self, platform):
-        images = self.docker.images
-        image_name = platform.image_name
+    def build_image(self, platform_name, path=None):
+        image_name = '{}{}'.format(self.IMAGE_PREFIX, platform_name)
 
         try:
-            images.get(image_name)
+            self.docker.images.get(image_name)
         except docker.errors.ImageNotFound:
-            pass
+            cmd = ['docker', 'build', '-t', image_name, '--network', 'host']
+
+            if path is None:
+                cmd.append(sh.path('docker', platform_name))
+            else:
+                cmd += [
+                    '-f', sh.path('docker', platform_name, 'Dockerfile'),
+                    path
+                ]
+
+            sh.call(cmd)
         else:
-            sh.echo('Removing image {!r}'.format(image_name))
-            images.remove(image_name, force=True)
+            sh.echo('Image {!r} already exists'.format(image_name))
 
-        dockerfiles_dir = sh.ensure_dir('.dockerfiles')
-        dockerfile_path = sh.path(dockerfiles_dir, image_name)
-        sh.write(dockerfile_path, platform.dockerfile)
+    def remove_dangling_images(self):
+        for image in self.docker.images.list(filters={'dangling': True}):
+            self.remove_image(image.short_id)
 
-        # Using CLI instead of API for rich output
-        sh.call(['docker', 'build', '-t', image_name, '-f', dockerfile_path, '.'])
-
-
-class Platform(object):
-    def __init__(self, repo, tag):
-        self.repo = repo
-        self.tag = tag
-
-    @property
-    def image_name(self):
-        return 'mollusc-{}-{}'.format(self.repo, self.tag)
-
-    @property
-    def dockerfile(self):
-        return dedent('''\
-            FROM {}:{}
-            WORKDIR /mollusc
-            ADD . /mollusc
-            '''.format(self.repo, self.tag))
-
-    def run(self, cmd):
-        sh.call(['docker', 'run', self.image_name] + list(cmd))
-
-    def build(self):
-        # TODO: can only be one command
-        self.run(['/mollusc/bootstrap', 'dev', 'test'])
-
-
-class Debian(Platform):
-    def __init__(self, tag):
-        super(Debian, self).__init__('debian', tag)
-
-    def build(self):
-        self.run(['bash', '-c', 'apt-get -q update && apt-get -qy install python2.7 python3'])
-        super(Debian, self).build()
+    def remove_image(self, name):
+        try:
+            self.docker.images.get(name)
+        except docker.errors.ImageNotFound:
+            sh.echo('Image {!r} does not exist'.format(name))
+        else:
+            sh.call(['docker', 'image', 'rm', '-f', name])
