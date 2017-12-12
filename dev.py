@@ -7,105 +7,94 @@ from mollusc.dist import Twine
 from os import path as osp
 
 
-@click.group(chain=True,
-             context_settings={'help_option_names': ['-h', '--help']})
+IMAGE_PREFIX = 'mollusc-'
+
+
+@click.group(chain=True, context_settings={'help_option_names': ['-h', '--help']})
 def cli():
     sh.change_dir(osp.dirname(__file__))
 
 
-@cli.command('test')
-def cli_test():
-    sh.remove('.tox')
-    sh.call(['tox'])
+class Cli(object):
+    @cli.command('test')
+    @click.option('-T', '--skip-tox', is_flag=True,
+                  help='Skip running tox (not tox in docker tests).')
+    @click.option('-D', '--skip-docker', is_flag=True,
+                  help='Skip docker tests.')
+    @click.option('-i', '--docker-image', multiple=True,
+                  help=('Docker image to test on (e.g. debian-jessie),'
+                        ' can be spcified multiple times, default all images.'))
+    def test(skip_tox, skip_docker, docker_image):
+        if not skip_tox:
+            sh.remove('.tox')
+            sh.call(['tox'])
 
+        if skip_docker:
+            return
 
-@cli.command('build')
-def cli_build():
-    sh.remove(['build', 'dist'])
-    sh.remove(sh.glob(sh.path('src', '*.egg.info')))
-    sh.call(['python', 'setup.py', 'build', 'bdist_wheel'])
-
-    sh.remove('.site')
-    sh.call(['mkdocs', 'build'])
-
-
-@cli.command('deploy-wheel')
-@click.option('-u', '--username')
-def cli_deploy_wheel(username):
-    twine = Twine(username)
-    files = sh.glob(sh.path('dist', '*.whl'))
-    twine.upload(files)
-
-
-@cli.command('deploy-doc')
-def cli_deploy_doc():
-    sh.call(['mkdocs', 'gh-deploy', '--force'])
-
-
-@cli.command('build-image')
-@click.option('--rebuild', is_flag=True, help='Rebuild if base image already exists')
-@click.argument('platform', nargs=-1)
-def cli_build_image(platform, rebuild):
-    docker = Docker()
-    test_suffix = '-test'
-    platf_names = platform or [n for n in os.listdir('docker') if n.endswith(test_suffix)]
-
-    try:
-        for platf_name in platf_names:
-            if platf_name.endswith(test_suffix):
-                base_platf_name = platf_name[:-len(test_suffix)]
-                test_platf_name = platf_name
-            else:
-                base_platf_name = platf_name
-                test_platf_name = None
-
-            if base_platf_name:
-                if rebuild:
-                    docker.remove_image(base_platf_name)  # TODO: image name
-
-                docker.build_image(base_platf_name)
-
-            if test_platf_name:
-                docker.remove_image(test_platf_name)  # TODO: image name
-                docker.build_image(test_platf_name, '.')
-    finally:
-        docker.remove_dangling_images()
-
-
-class Docker(object):
-    IMAGE_PREFIX = 'mollusc-'
-
-    def __init__(self):
-        self.docker = docker.from_env()
-
-    def build_image(self, platform_name, path=None):
-        image_name = '{}{}'.format(self.IMAGE_PREFIX, platform_name)
+        if not docker_image:
+            docker_image = [n for n in os.listdir('docker')]
 
         try:
-            self.docker.images.get(image_name)
-        except docker.errors.ImageNotFound:
-            cmd = ['docker', 'build', '-t', image_name, '--network', 'host']
+            for image_name in docker_image:
+                test_image(image_name)
+        finally:
+            remove_dangling_images()
 
-            if path is None:
-                cmd.append(sh.path('docker', platform_name))
-            else:
-                cmd += [
-                    '-f', sh.path('docker', platform_name, 'Dockerfile'),
-                    path
-                ]
+    @cli.command('build')
+    def build():
+        sh.remove(['build', 'dist'])
+        sh.remove(sh.glob(sh.path('src', '*.egg.info')))
+        sh.call(['python', 'setup.py', 'build', 'bdist_wheel'])
 
-            sh.call(cmd)
-        else:
-            sh.echo('Image {!r} already exists'.format(image_name))
+        sh.remove('.site')
+        sh.call(['mkdocs', 'build'])
 
-    def remove_dangling_images(self):
-        for image in self.docker.images.list(filters={'dangling': True}):
-            self.remove_image(image.short_id)
+    @cli.command('deploy-wheel')
+    @click.option('-u', '--username')
+    def deploy_wheel(username):
+        twine = Twine(username)
+        files = sh.glob(sh.path('dist', '*.whl'))
+        twine.upload(files)
 
-    def remove_image(self, name):
-        try:
-            self.docker.images.get(name)
-        except docker.errors.ImageNotFound:
-            sh.echo('Image {!r} does not exist'.format(name))
-        else:
-            sh.call(['docker', 'image', 'rm', '-f', name])
+    @cli.command('deploy-doc')
+    def deploy_doc():
+        sh.call(['mkdocs', 'gh-deploy', '--force'])
+
+
+def test_image(name):
+    if name.startswith(IMAGE_PREFIX):
+        tag = name
+        name = name[len(IMAGE_PREFIX):]
+    else:
+        tag = IMAGE_PREFIX + name
+
+    sh.call([
+        'docker', 'build',
+        '-t', tag,
+        '--network', 'host',
+        sh.path('docker', name)
+    ])
+
+    script_name = name + '.sh'
+    project_dir = '/tmp/mollusc'
+
+    sh.call([
+        'docker', 'run',
+        '-v', '{}:{}'.format(sh.path('.', rel=False), project_dir),
+        '-w', project_dir,
+        '--network', 'host',
+        '-t',
+        '-a', 'STDIN', '-a', 'STDOUT', '-a', 'STDERR',
+        '-e', 'LC_ALL=C.UTF-8',
+        '-e', 'LANG=C.UTF-8',
+        tag,
+        'bash', '-ex', sh.path('docker-test', script_name)
+    ])
+
+
+def remove_dangling_images():
+    dock = docker.from_env()
+
+    for image in dock.images.list(filters={'dangling': True}):
+        sh.call(['docker', 'image', 'rm', '-f', image.short_id])
