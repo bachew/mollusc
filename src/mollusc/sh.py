@@ -9,6 +9,7 @@ import stat
 import subprocess
 import tempfile
 from contextlib import contextmanager
+from functools import wraps
 from mollusc import util
 from os import path as osp
 from pprint import pformat
@@ -37,13 +38,12 @@ class Shell(object):
     def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
         self.stderr = stderr
-
-        def get_enc(f):
-            return getattr(f, 'encoding', None)
-
-        self.encoding = get_enc(stdout) or get_enc(stderr) or DEFAULT_ENCODING
+        self.echo_on = True
 
     def echo(self, msg, error=False, end='\n', flush=True):
+        if not self.echo_on:
+            return
+
         s = self.format_message(msg)
         file = self.stderr if error else self.stdout
         six.print_(s, file=file, end=end, flush=flush)
@@ -56,6 +56,16 @@ class Shell(object):
             return msg.decode(self.encoding)
 
         return pformat(msg)
+
+    @property
+    def encoding(self):
+        def get_enc(f):
+            return getattr(f, 'encoding', None)
+
+        return get_enc(self.stdout) or get_enc(self.stderr) or DEFAULT_ENCODING
+
+    def context(self, **attrs):
+        return ShellContext(self, attrs)
 
     def ensure_dir(self, path):
         self.echo('Ensure dir {!r}'.format(path))
@@ -86,7 +96,7 @@ class Shell(object):
         return unchanger
 
     @contextmanager
-    def change_temp_dir(self, **kwargs):
+    def in_temp_dir(self, **kwargs):
         with self.temp_dir(**kwargs) as path, self.change_dir(path):
             yield path
 
@@ -162,28 +172,24 @@ class Shell(object):
 
         return osp.relpath(pathstr, str(rel))
 
-    def write(self, path, data, echo=True):
-        if echo:
-            self.echo('Writing {!r}'.format(osp.relpath(path)))
+    def write(self, path, data):
+        self.echo('Writing {!r}'.format(osp.relpath(path)))
 
         # TODO: atomic write
         with open(path, 'w') as f:
             f.write(data)
 
-    def chmod_x(self, path, echo=True):
-        if echo:
-            self.echo('chmod +x {!r}'.format(osp.relpath(path)))
-
+    def chmod_x(self, path):
+        self.echo('chmod +x {!r}'.format(osp.relpath(path)))
         mode = os.stat(path).st_mode
         os.chmod(path, mode | stat.S_IXGRP | stat.S_IXUSR | stat.S_IXOTH)
 
-    def remove(self, paths, echo=True):
+    def remove(self, paths):
         if paths is None:
             return
 
         def rm(path):
-            if echo:
-                self.echo('Removing {!r}'.format(osp.relpath(path)))
+            self.echo('Removing {!r}'.format(osp.relpath(path)))
 
             try:
                 try:
@@ -214,6 +220,71 @@ class Shell(object):
     # TODO: copy, rename
 
 
+class ContextManagerDecorator(object):
+    @classmethod
+    def call(cls, *args, **kwargs):
+        obj = cls(*args, **kwargs)
+
+        if len(args) == 1 and not kwargs and callable(args[0]):
+            return obj(args[0])
+
+        return obj
+
+    def __call__(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            self.enter()
+            try:
+                ret = func(*args, **kwargs)
+            finally:
+                self.exit()
+
+            return ret
+
+        return wrapper
+
+    def __enter__(self):
+        if not self.entered:
+            self.enter()
+            self.entered = True
+
+    def __exit__(self, exc_type, exc, tb):
+        self.exit()
+
+    def enter(self):
+        pass
+
+    def exit(self):
+        pass
+
+
+class ShellContext(object):
+    def __init__(self, sh, attrs):
+        self.sh = sh
+        self.attrs = attrs
+        self.orig_attrs = dict([(k, getattr(sh, k)) for k in attrs])
+
+    def __call__(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            self.__enter__()
+            try:
+                ret = func(*args, **kwargs)
+            finally:
+                self.__exit__()
+
+            return ret
+
+        return wrapper
+
+    def __enter__(self):
+        self.sh.__dict__.update(self.attrs)
+        return None
+
+    def __exit__(self, exc_type, exc, tb):
+        self.sh.__dict__.update(self.orig_attrs)
+
+
 class UnchangeDir(object):
     def __init__(self, sh, orig_dir, from_dir):
         self.sh = sh
@@ -221,9 +292,9 @@ class UnchangeDir(object):
         self.from_dir = from_dir
 
     def __enter__(self):
-        return self
+        return None
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc, tb):
         self.sh.echo('cd {!r}  # back from {!r}'.format(self.orig_dir, self.from_dir))
         os.chdir(self.orig_dir)
 

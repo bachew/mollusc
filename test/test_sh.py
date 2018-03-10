@@ -72,6 +72,31 @@ class TestEcho(object):
         sh2.echo(obj, end='')
         assert sh2.stdout_str == pformat(obj)
 
+    def test_echo_off(self, sh2):
+        sh2.echo_on = False
+        sh2.echo('Hello')
+        assert sh2.stdout_str == ''
+        sh2.echo_on = True
+        sh2.echo('Help!')
+        assert sh2.stdout_str == 'Help!\n'
+
+
+class TestContext(object):
+    def test_context_manager(self, sh2):
+        with sh2.context(echo_on=False):
+            sh2.echo('Hello')
+
+        sh2.echo('Help!')
+        assert sh2.stdout_str == 'Help!\n'
+
+    def test_decorator(self, sh2):
+        @sh2.context(echo_on=False)
+        def hello():
+            sh2.echo('Hello')
+
+        sh2.echo('Help!')
+        assert sh2.stdout_str == 'Help!\n'
+
 
 class TestEnsureDir(object):
     def test_ensure(self, tmpdir):
@@ -128,8 +153,8 @@ class TestChangeDir(object):
             ''').format(tmpdir.strpath, orig_dir, tmpdir.strpath)
 
 
-def test_change_temp_dir(tmpdir):
-    with sh.change_temp_dir() as path:
+def test_in_temp_dir(tmpdir):
+    with sh.in_temp_dir() as path:
         assert osp.samefile(path, os.getcwd())
 
     assert not osp.exists(path)

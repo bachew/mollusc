@@ -63,8 +63,10 @@ class VirtualEnv(object):
             'from ', module, ' import ', function, '\n\n',
             function, '()\n'
         ]
-        sh.write(script_file, ''.join(script), echo=False)
-        sh.chmod_x(script_file, echo=False)
+
+        with sh.attrs(echo_on=False):
+            sh.write(script_file, ''.join(script))
+            sh.chmod_x(script_file)
 
 
 util.make_object_module(locals(), VirtualEnv())
