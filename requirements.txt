@@ -2,5 +2,6 @@ click==6.7
 keyring==10.5.0
 mkdocs==0.17.1
 pytest==3.2.3
+six>=1.11.0
 tox==2.9.1
 twine==1.9.1

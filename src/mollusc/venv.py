@@ -64,7 +64,7 @@ class VirtualEnv(object):
             function, '()\n'
         ]
 
-        with sh.attrs(echo_on=False):
+        with sh.context(echo_on=False):
             sh.write(script_file, ''.join(script))
             sh.chmod_x(script_file)
 
